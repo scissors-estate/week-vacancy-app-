@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>週末清掃確認</title>
+<style>
+  :root{ --ink:#1e2233; --sub:#6b7280; --line:#e3e6ef; --head:#eef0fb; --accent:#4f46e5;
+         --green:#4CAF50; --blue:#2196F3; --yellow:#FFC107; --red:#c62828; --note:#8a5a00;
+         --gG:#e7f6ea; --gB:#e6f0fd; --gY:#fef6e0; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:"Meiryo","Yu Gothic",system-ui,sans-serif; color:var(--ink);
+        background:#f7f8fc; font-size:14px; line-height:1.5; }
+  .wrap{ max-width:900px; margin:0 auto; padding:18px 16px 60px; }
+  h1{ font-size:18px; margin:4px 0 14px; }
+  .bar{ background:var(--head); border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+        display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  .bar label{ font-weight:700; }
+  input[type=date]{ font:inherit; padding:5px 8px; border:1px solid #c7cbdb; border-radius:6px; background:#fff; }
+  .btn{ font:inherit; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-ghost{ background:#fff; border:1px solid #c7cbdb; }
+  .btn:disabled{ opacity:.45; cursor:default; }
+  .range{ font-weight:700; }
+  .desc{ color:var(--sub); font-size:12.5px; margin:8px 2px 4px; }
+  .files{ display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+  .drop{ flex:1 1 260px; min-width:240px; border:1.5px dashed #c2c7db; border-radius:10px;
+         padding:12px; background:#fff; text-align:center; transition:.15s; }
+  .drop.over{ border-color:var(--accent); background:#f2f3ff; }
+  .drop b{ display:block; font-size:12.5px; }
+  .drop small{ color:var(--sub); font-size:11.5px; }
+  .drop .name{ margin-top:6px; font-size:12px; }
+  .ok{ color:#1b8a3a; font-weight:700; }
+  .warn{ color:#b26a00; }
+  .exports{ margin-left:auto; display:flex; gap:8px; }
+  section.grp{ margin-top:22px; }
+  .ghead{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .dot{ width:14px; height:14px; border-radius:50%; display:inline-block; }
+  .gtitle{ font-weight:700; font-size:15px; }
+  .gcount{ color:var(--sub); font-size:12.5px; }
+  .gnote{ color:var(--note); font-size:12px; }
+  table{ width:100%; border-collapse:collapse; background:#fff; }
+  th,td{ border:1px solid var(--line); padding:7px 10px; text-align:left; font-size:13px; }
+  th{ background:#eceef5; font-weight:700; }
+  td.rm{ width:34%; }
+  .none{ color:var(--red); font-weight:600; }
+  .empty{ color:var(--sub); padding:10px 2px; }
+  .foot{ margin-top:26px; color:var(--sub); font-size:11.5px; border-top:1px solid var(--line); padding-top:10px; }
+  .holbox{ margin-top:10px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:0 12px; }
+  .holbox summary{ cursor:pointer; font-weight:700; padding:9px 0; font-size:13.5px; list-style:revert; }
+  .holbody{ padding:2px 0 12px; }
+  .holadd{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .holhint{ color:var(--sub); font-size:11.5px; }
+  #holStatus{ margin-top:8px; }
+  .holchips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; background:#eef0fb; border:1px solid #d7dbf0;
+         border-radius:14px; padding:3px 5px 3px 10px; font-size:12px; }
+  .chip button{ border:none; background:#c7cbdb; color:#fff; border-radius:50%; width:16px; height:16px;
+                line-height:16px; text-align:center; cursor:pointer; font-size:11px; padding:0; }
+  .chip button:hover{ background:#8a90b5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週末清掃確認</h1>
+
+  <div class="bar">
+    <label for="sat">対象の土曜：</label>
+    <input type="date" id="sat">
+    <button class="btn btn-ghost" id="thisweek">今週末</button>
+    <span class="range" id="range">—</span>
+    <div class="exports">
+      <button class="btn btn-ghost" id="btnXls" disabled>Excel出力</button>
+      <button class="btn btn-ghost" id="btnJpg" disabled>JPEG出力</button>
+    </div>
+  </div>
+  <div class="desc">週末（土夜・日夜）に空室の部屋と、その日曜に同じ建物へ来る清掃スタッフを一覧化します。満室の部屋は除外。ブロックは占有として扱います。</div>
+
+  <details class="holbox" id="holbox">
+    <summary>祝日設定 <span id="holCount"></span></summary>
+    <div class="holbody">
+      <div class="holadd">
+        <input type="date" id="holInput">
+        <button class="btn btn-ghost" id="holAdd">祝日として追加</button>
+        <span class="holhint">組込みの祝日（海の日・振替休日など）に加えて、臨時の祝日などをここで追加できます（自動保存）。</span>
+      </div>
+      <div id="holStatus" class="holhint"></div>
+      <div class="holchips" id="holChips"></div>
+    </div>
+  </details>
+
+  <div class="files">
+    <div class="drop" id="dropB">
+      <b>① 予約CSV</b><small>Booking_*.csv をドロップ / クリックで選択</small>
+      <div class="name" id="nameB">未読込</div>
+      <input type="file" id="fileB" accept=".csv" hidden>
+    </div>
+    <div class="drop" id="dropC">
+      <b>② 清掃タスクCSV</b><small>cleaning_tasks_*.csv をドロップ / クリックで選択</small>
+      <div class="name" id="nameC">未読込</div>
+      <input type="file" id="fileC" accept=".csv" hidden>
+    </div>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="foot">
+    判定：占有=「確認済み」または「ブロックされた」の予約がその夜にある部屋。夜Nの占有＝チェックイン≤N＜チェックアウト。システムキャンセルは空室扱い。<br>
+    クリーナー：対象「日曜」当日に同じ建物（部屋名の頭で判定・08と10代行等は統合）を清掃するスタッフのみ。無ければ「出勤予定なし」。未割当はそのまま「未割当」と表示。<br>
+    祝日：対象の月曜が祝日（組込みの祝日＋「祝日設定」で追加した日）の場合、日付表示に月曜(祝日)を含め、日曜のみ空室の注意書きが「M/D(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意」に変わり、月曜(祝日)当日の同建物クリーナーを表示します（通常は日曜のみ空室のクリーナーは非表示）。
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- CSV parser (quoted / 改行入りフィールド対応) ----------
+  function parseCSV(text){
+    if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+    const rows=[]; let row=[], field="", inQ=false, i=0;
+    while(i<text.length){
+      const ch=text[i];
+      if(inQ){
+        if(ch==='"'){ if(text[i+1]==='"'){ field+='"'; i+=2; continue; } inQ=false; i++; continue; }
+        field+=ch; i++; continue;
+      }
+      if(ch==='"'){ inQ=true; i++; continue; }
+      if(ch===','){ row.push(field); field=""; i++; continue; }
+      if(ch==='\r'){ i++; continue; }
+      if(ch==='\n'){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+      field+=ch; i++;
+    }
+    if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  function toObjects(text){
+    const rows=parseCSV(text).filter(r=> r.some(c=> c!==""));
+    if(!rows.length) return [];
+    const head=rows[0].map(h=>h.trim());
+    return rows.slice(1).map(r=>{ const o={}; head.forEach((h,idx)=> o[h]=r[idx]!==undefined?r[idx]:""); return o; });
+  }
+
+  // ---------- date utils（文字列比較でタイムゾーン非依存） ----------
+  const nd = s => (s||"").slice(0,10).replace(/\//g,"-");
+  function addDays(ymd,n){ const d=new Date(ymd+"T00:00:00"); d.setDate(d.getDate()+n);
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${da}`; }
+  const md = ymd => { const p=ymd.split("-"); return `${+p[1]}/${+p[2]}`; };
+  function upcomingSaturday(){ const d=new Date(); const diff=(6-d.getDay()+7)%7; return addDays(
+      `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`, diff); }
+
+  // ---------- 日本の祝日判定（固定祝日・ハッピーマンデー・春分秋分・振替休日） ----------
+  function fmtDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+  const _holCache={};
+  function jpHolidays(year){
+    if(_holCache[year]) return _holCache[year];
+    const set=new Set();
+    const add=(m,d)=> set.add(`${year}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+    add(1,1); add(2,11); add(2,23); add(4,29); add(5,3); add(5,4); add(5,5); add(8,11); add(11,3); add(11,23);
+    const nthMon=(month,nth)=>{ const d=new Date(year,month-1,1); let cnt=0;
+      while(true){ if(d.getDay()===1){ if(++cnt===nth) return d.getDate(); } d.setDate(d.getDate()+1); } };
+    add(1,nthMon(1,2));   // 成人の日
+    add(7,nthMon(7,3));   // 海の日
+    add(9,nthMon(9,3));   // 敬老の日
+    add(10,nthMon(10,2)); // スポーツの日
+    add(3, Math.floor(20.8431+0.242194*(year-1980)-Math.floor((year-1980)/4))); // 春分の日
+    add(9, Math.floor(23.2488+0.242194*(year-1980)-Math.floor((year-1980)/4))); // 秋分の日
+    // 振替休日：祝日が日曜なら翌平日（次の非祝日）を休日に
+    [...set].sort().forEach(ds=>{ const dt=new Date(ds+"T00:00:00");
+      if(dt.getDay()===0){ const n=new Date(dt); do{ n.setDate(n.getDate()+1); }while(set.has(fmtDate(n))); set.add(fmtDate(n)); } });
+    _holCache[year]=set; return set;
+  }
+  function isJpHoliday(ymd){ return jpHolidays(+ymd.slice(0,4)).has(ymd); }
+
+  // ---------- カスタム祝日（手動設定・localStorage保存） ----------
+  const HOL_KEY="whv_custom_holidays";
+  let customHolidays=new Set();
+  try{ customHolidays=new Set(JSON.parse(localStorage.getItem(HOL_KEY)||"[]")); }catch(e){}
+  function saveHolidays(){ try{ localStorage.setItem(HOL_KEY, JSON.stringify([...customHolidays].sort())); }catch(e){} }
+  function isHoliday(ymd){ return isJpHoliday(ymd) || customHolidays.has(ymd); }
+
+  // ---------- 建物判定（部屋名の頭） ----------
+  function getBuilding(room){
+    let p=String(room).replace(/\d+$/,"");
+    if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
+    return p;
+  }
+
+  // ---------- 集計本体 ----------
+  function compute(bookingText, cleaningText, satStr){
+    const bookings=toObjects(bookingText), cleaning=toObjects(cleaningText);
+    const sun=addDays(satStr,1);
+    const mon=addDays(satStr,2);
+    const monHoliday=isHoliday(mon);
+    // 日曜・建物別 稼働クリーナー
+    const sunByBld={};
+    cleaning.forEach(c=>{
+      if(nd(c["清掃日"])!==sun) return;
+      const name=(c["クリーナー"]||"").trim();
+      if(!name) return;
+      const b=getBuilding(c["部屋タイプ"]);
+      (sunByBld[b]=sunByBld[b]||new Set()).add(name);
+    });
+    // 月曜（祝日）・建物別 稼働クリーナー
+    const monByBld={};
+    if(monHoliday) cleaning.forEach(c=>{
+      if(nd(c["清掃日"])!==mon) return;
+      const name=(c["クリーナー"]||"").trim();
+      if(!name) return;
+      const b=getBuilding(c["部屋タイプ"]);
+      (monByBld[b]=monByBld[b]||new Set()).add(name);
+    });
+    const occ=bookings.filter(b=> b["状態"]==="確認済み" || b["状態"]==="ブロックされた");
+    const seen={}, roomList=[];
+    bookings.forEach(b=>{ const key=b["物件名"]+"|"+b["ルームタイプメニュー"];
+      if(!seen[key]){ seen[key]=1; roomList.push([b["物件名"],b["ルームタイプメニュー"]]); } });
+    const out=[];
+    roomList.forEach(([bld,room])=>{
+      let so=false, su=false;
+      occ.forEach(b=>{ if(b["物件名"]!==bld || b["ルームタイプメニュー"]!==room) return;
+        const ci=nd(b["チェックイン"]), co=nd(b["チェックアウト"]);
+        if(ci<=satStr && satStr<co) so=true;
+        if(ci<=sun && sun<co) su=true; });
+      if(so && su) return;
+      const kubun = (!so&&!su)?"土日":(!so?"土のみ":"日のみ");
+      let cleaner="";
+      if(kubun!=="日のみ"){ const b=getBuilding(room);
+        cleaner = sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; }
+      else if(monHoliday){ const b=getBuilding(room);
+        cleaner = monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; }
+      const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
+      out.push({room,cleaner,kubun,num,bld});
+    });
+    out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    const note=`${md(sun)}(日)OUTの予約が入ったら日曜日の掃除が増えるので要注意`;
+    const sections=[
+      {key:"土日", mark:"🟢", color:"var(--green)", title:"土日とも空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
+        rows:out.filter(r=>r.kubun==="土日")},
+      {key:"土のみ", mark:"🔵", color:"var(--blue)", title:"土曜のみ空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
+        rows:out.filter(r=>r.kubun==="土のみ")},
+      {key:"日のみ", mark:"🟡", color:"var(--yellow)", title:"日曜のみ空室",
+        note: monHoliday ? `${md(mon)}(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意` : "掃除は月曜日以降なので気にしないでOK",
+        hasC: monHoliday, colLabel:"月曜(祝日)同建物クリーナー",
+        rows:out.filter(r=>r.kubun==="日のみ")},
+    ];
+    return {sections, sat:satStr, sun};
+  }
+
+  // ---------- state ----------
+  const state={ bText:null, cText:null, sat:null, result:null };
+  const $=id=>document.getElementById(id);
+
+  // ---------- render ----------
+  function render(){
+    const res=$("result"); res.innerHTML="";
+    if(state.sat){
+      const sun=addDays(state.sat,1), mon=addDays(state.sat,2);
+      let r=`${md(state.sat)}(土)～${md(sun)}(日)`;
+      if(isHoliday(mon)) r+=`　・　${md(mon)}（月・祝）`;
+      $("range").textContent=r;
+    } else $("range").textContent="—";
+    refreshHol();
+    if(!state.bText || !state.cText || !state.sat){
+      res.innerHTML=`<div class="empty">予約CSVと清掃CSVを読み込み、対象の土曜を指定してください。</div>`;
+      $("btnXls").disabled=true; $("btnJpg").disabled=true; state.result=null; return;
+    }
+    let data; try{ data=compute(state.bText, state.cText, state.sat); }
+    catch(e){ res.innerHTML=`<div class="empty none">集計エラー: ${e.message}</div>`; return; }
+    state.result=data;
+    data.sections.forEach(s=>{
+      const sec=document.createElement("section"); sec.className="grp";
+      const gh=document.createElement("div"); gh.className="ghead";
+      gh.innerHTML=`<span class="dot" style="background:${s.color}"></span>`+
+        `<span class="gtitle"></span><span class="gcount">（${s.rows.length}件）</span>`+
+        (s.note?`<span class="gnote">⚠ ${s.note}</span>`:"");
+      gh.querySelector(".gtitle").textContent=s.title;
+      sec.appendChild(gh);
+      const tbl=document.createElement("table");
+      const thead=`<tr><th class="rm">部屋</th>${s.hasC?`<th>${escapeHtml(s.colLabel)}</th>`:""}</tr>`;
+      let body="";
+      if(!s.rows.length){ body=`<tr><td class="rm" style="color:var(--sub)">なし</td>${s.hasC?"<td></td>":""}</tr>`; }
+      else s.rows.forEach(r=>{
+        const cls=(r.cleaner==="出勤予定なし")?' class="none"':'';
+        const cell=document.createElement("td"); cell.textContent=r.room;
+        const cCell=s.hasC?`<td${cls}></td>`:"";
+        body+=`<tr><td class="rm">${escapeHtml(r.room)}</td>${s.hasC?`<td${cls}>${escapeHtml(r.cleaner)}</td>`:""}</tr>`;
+      });
+      tbl.innerHTML=thead+body;
+      sec.appendChild(tbl);
+      res.appendChild(sec);
+    });
+    $("btnXls").disabled=false; $("btnJpg").disabled=false;
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  // ---------- Excel (SpreadsheetML 2003 / .xls・ライブラリ不要) ----------
+  function xesc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+  function exportExcel(){
+    if(!state.result) return;
+    const fill={"土日":"#C6EFCE","土のみ":"#BDD7EE","日のみ":"#FFEB9C"};
+    const B=`<Borders>
+      <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
+      <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
+      <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
+      <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/></Borders>`;
+    let styles=`
+      <Style ss:ID="hdr"><Font ss:Bold="1"/><Interior ss:Color="#E6E6E6" ss:Pattern="Solid"/>${B}</Style>
+      <Style ss:ID="cell">${B}</Style>
+      <Style ss:ID="cellR"><Font ss:Color="#C62828"/>${B}</Style>`;
+    Object.keys(fill).forEach(k=>{ styles+=`<Style ss:ID="sec_${k}"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="${fill[k]}" ss:Pattern="Solid"/></Style>`; });
+    let rowsXml="";
+    state.result.sections.forEach(s=>{
+      const head=`🟢🔵🟡`; // placeholder not used
+      const mark=s.key==="土日"?"🟢":s.key==="土のみ"?"🔵":"🟡";
+      const title=`${mark} ${s.title}`+(s.note?`   ⚠ ${s.note}`:"");
+      rowsXml+=`<Row><Cell ss:MergeAcross="1" ss:StyleID="sec_${s.key}"><Data ss:Type="String">${xesc(title)}</Data></Cell></Row>`;
+      if(s.hasC){
+        rowsXml+=`<Row><Cell ss:StyleID="hdr"><Data ss:Type="String">部屋</Data></Cell><Cell ss:StyleID="hdr"><Data ss:Type="String">${xesc(s.colLabel)}</Data></Cell></Row>`;
+        s.rows.forEach(r=>{ const st=(r.cleaner==="出勤予定なし")?"cellR":"cell";
+          rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell><Cell ss:StyleID="${st}"><Data ss:Type="String">${xesc(r.cleaner)}</Data></Cell></Row>`; });
+        if(!s.rows.length) rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell><Cell ss:StyleID="cell"><Data ss:Type="String"></Data></Cell></Row>`;
+      } else {
+        rowsXml+=`<Row><Cell ss:StyleID="hdr"><Data ss:Type="String">部屋</Data></Cell></Row>`;
+        s.rows.forEach(r=>{ rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell></Row>`; });
+        if(!s.rows.length) rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell></Row>`;
+      }
+      rowsXml+=`<Row></Row>`;
+    });
+    const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>${styles}</Styles>
+<Worksheet ss:Name="空室一覧"><Table>
+<Column ss:Width="100"/><Column ss:Width="240"/>
+${rowsXml}
+</Table></Worksheet></Workbook>`;
+    download(new Blob([xml],{type:"application/vnd.ms-excel;charset=utf-8"}), `空室_クリーナー一覧_${state.sat}.xls`);
+  }
+
+  // ---------- JPEG (canvas) ----------
+  function exportJpeg(){
+    if(!state.result) return;
+    const secs=state.result.sections, SC=2, W=760;
+    const secH=40, colH=30, rowH=30, gap=16;
+    let H=10; secs.forEach(s=> H+= secH+colH+(Math.max(s.rows.length,1))*rowH+gap); H+=10;
+    const cv=document.createElement("canvas"); cv.width=W*SC; cv.height=H*SC;
+    const g=cv.getContext("2d"); g.scale(SC,SC); g.textBaseline="top";
+    g.fillStyle="#ffffff"; g.fillRect(0,0,W,H);
+    const L=20, rmW=150, clW=W-L*2-rmW;
+    const colDot={"土日":"#4CAF50","土のみ":"#2196F3","日のみ":"#FFC107"};
+    let y=10;
+    secs.forEach(s=>{
+      g.fillStyle=colDot[s.key]; g.beginPath(); g.arc(L+8,y+13,8,0,Math.PI*2); g.fill();
+      g.fillStyle="#1e2233"; g.font="bold 15px Meiryo,sans-serif"; g.fillText(s.title, L+24, y+3);
+      const tw=g.measureText(s.title).width;
+      g.fillStyle="#6b7280"; g.font="12px Meiryo,sans-serif"; g.fillText(`（${s.rows.length}件）`, L+24+tw+6, y+6);
+      if(s.note){ const cw=g.measureText(`（${s.rows.length}件）`).width;
+        g.fillStyle="#8a5a00"; g.font="11.5px Meiryo,sans-serif"; g.fillText("⚠ "+s.note, L+24+tw+6+cw+8, y+7); }
+      y+=secH;
+      const tblW = s.hasC ? rmW+clW : rmW;
+      g.fillStyle="#eceef5"; g.fillRect(L,y,tblW,colH);
+      g.strokeStyle="#b4b4b4"; g.lineWidth=1;
+      g.strokeRect(L,y,rmW,colH); g.fillStyle="#1e2233"; g.font="bold 13px Meiryo,sans-serif"; g.fillText("部屋",L+8,y+8);
+      if(s.hasC){ g.strokeRect(L+rmW,y,clW,colH); g.fillText(s.colLabel,L+rmW+8,y+8); }
+      y+=colH;
+      const rows = s.rows.length? s.rows : [{room:"なし",cleaner:""}];
+      rows.forEach(r=>{
+        g.strokeRect(L,y,rmW,rowH); g.fillStyle="#1e2233"; g.font="13px Meiryo,sans-serif"; g.fillText(r.room,L+8,y+8);
+        if(s.hasC){ g.strokeRect(L+rmW,y,clW,rowH);
+          g.fillStyle=(r.cleaner==="出勤予定なし")?"#c62828":"#1e2233"; g.fillText(r.cleaner,L+rmW+8,y+8); }
+        y+=rowH;
+      });
+      y+=gap;
+    });
+    cv.toBlob(b=> download(b, `空室_クリーナー一覧_${state.sat}.jpg`), "image/jpeg", 0.92);
+  }
+
+  function download(blob, name){
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  }
+
+  // ---------- file loading + auto-detect ----------
+  function ingest(text, forced){
+    const head=(text.split(/\r?\n/,1)[0]||"");
+    const isClean = /清掃日/.test(head) || (/部屋タイプ/.test(head) && !/ルームタイプメニュー/.test(head));
+    const isBook  = /ルームタイプメニュー/.test(head) || /チェックイン/.test(head);
+    let kind = forced || (isClean?"C":(isBook?"B":null));
+    if(!kind) return {ok:false,msg:"種類を判別できませんでした"};
+    if(kind==="B"){ state.bText=text; $("nameB").innerHTML='<span class="ok">✓ 予約CSV 読込済</span>'; }
+    else { state.cText=text; $("nameC").innerHTML='<span class="ok">✓ 清掃CSV 読込済</span>'; }
+    render(); return {ok:true,kind};
+  }
+  function readFile(f, forced){ const rd=new FileReader(); rd.onload=()=> ingest(rd.result, forced); rd.readAsText(f,"UTF-8"); }
+  function wireDrop(dropId, inputId, forced, nameId){
+    const dz=$(dropId), inp=$(inputId);
+    dz.addEventListener("click",()=> inp.click());
+    inp.addEventListener("change",e=>{ if(e.target.files[0]){ $(nameId).textContent=e.target.files[0].name; readFile(e.target.files[0],forced); } });
+    ["dragover","dragenter"].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add("over"); }));
+    ["dragleave","drop"].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove("over"); }));
+    dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f){ $(nameId).textContent=f.name; readFile(f,forced); } });
+  }
+
+  // ---------- 祝日設定 UI ----------
+  function refreshHol(){
+    const cnt=$("holCount"); if(cnt) cnt.textContent = customHolidays.size ? `（${customHolidays.size}件）` : "";
+    const box=$("holChips");
+    if(box){ box.innerHTML="";
+      [...customHolidays].sort().forEach(d=>{
+        const wd=["日","月","火","水","木","金","土"][new Date(d+"T00:00:00").getDay()];
+        const chip=document.createElement("span"); chip.className="chip";
+        const lbl=document.createElement("span"); lbl.textContent=`${md(d)}（${wd}）`;
+        const btn=document.createElement("button"); btn.textContent="×"; btn.title="削除";
+        btn.addEventListener("click",()=>{ customHolidays.delete(d); saveHolidays(); refreshHol(); render(); });
+        chip.appendChild(lbl); chip.appendChild(btn); box.appendChild(chip);
+      });
+    }
+    const st=$("holStatus");
+    if(st){ if(state.sat){ const mon=addDays(state.sat,2);
+        st.textContent=`対象の月曜 ${md(mon)}（月）は ${isHoliday(mon)?"祝日として扱われます":"平日です"}`; }
+      else st.textContent=""; }
+  }
+  function addHoliday(){ const v=$("holInput").value; if(!v) return;
+    customHolidays.add(v); saveHolidays(); $("holInput").value=""; refreshHol(); render(); }
+
+  // ---------- init ----------
+  wireDrop("dropB","fileB","B","nameB");
+  wireDrop("dropC","fileC","C","nameC");
+  $("holAdd").addEventListener("click",addHoliday);
+  $("sat").value = upcomingSaturday(); state.sat=$("sat").value;
+  $("sat").addEventListener("change",()=>{ state.sat=$("sat").value||null; render(); });
+  $("thisweek").addEventListener("click",()=>{ $("sat").value=upcomingSaturday(); state.sat=$("sat").value; render(); });
+  $("btnXls").addEventListener("click",exportExcel);
+  $("btnJpg").addEventListener("click",exportJpeg);
+  render();
+
+  // テスト用に公開
+  window.__app={ compute, parseCSV, getBuilding, run:(b,c,s)=>compute(b,c,s) };
+})();
+</script>
+</body>
+</html>
