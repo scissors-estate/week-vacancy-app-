@@ -249,42 +249,37 @@
         if(ci<=satStr && satStr<co) so=true;
         if(ci<=sun && sun<co) su=true;
         if(monHoliday && ci<=mon && mon<co) mo=true; });
-      let kubun;
-      if(!so && !su) kubun="土日";                         // 土・日空き（月は不問）
-      else if(monHoliday && so && !su && !mo) kubun="日月"; // 土埋まり、日・月(祝)空き
-      else if(!so && su) kubun="土のみ";                    // 土だけ空き
-      else if(so && !su) kubun="日のみ";                    // 日だけ空き（祝日時は月埋まり）
-      else if(monHoliday && !mo) kubun="月のみ";            // 土日埋まり、月(祝)だけ空き
-      else return;                                          // 全て埋まり（月曜が平日なら土日埋まりで除外）
-      let cleaner="";
-      if(kubun==="土日" || kubun==="土のみ"){ const b=getBuilding(room);
-        cleaner = sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; }
-      else if(kubun==="日月" || (kubun==="日のみ" && monHoliday)){ const b=getBuilding(room);
-        cleaner = monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; }
+      // 該当する夜がすべて埋まっている部屋のみ除外（祝日時は土日月、平日時は土日）
+      if(monHoliday ? (so && su && mo) : (so && su)) return;
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
-      out.push({room,cleaner,kubun,num,bld});
+      out.push({room, num, so, su, mo});
     });
     out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    const sunCln = room => { const b=getBuilding(room); return sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; };
+    const monCln = room => { const b=getBuilding(room); return monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; };
+    const mk = (rows, cln) => rows.map(r=> ({room:r.room, cleaner: cln ? cln(r.room) : ""}));
     const note=`${md(sun)}(日)OUTの予約が入ったら日曜日の掃除が増えるので要注意`;
     const monNote=`${md(mon)}(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意`;
+    // 土日とも空室：土・日とも空き（月は不問）。日月とも空室：日・月(祝)とも空き（土は不問）。
+    // → 3泊とも空きの部屋は「土日」「日月」の両方に表示される。
     const sections=[
       {key:"土日", mark:"🟢", color:"var(--green)", title:"土日とも空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
-        rows:out.filter(r=>r.kubun==="土日")},
+        rows: mk(out.filter(r=> !r.so && !r.su), sunCln)},
     ];
     if(monHoliday) sections.push({key:"日月", mark:"🟠", color:"var(--orange)", title:"日月(祝日)とも空室",
       note:monNote, hasC:true, colLabel:"月曜(祝日)同建物クリーナー",
-      rows:out.filter(r=>r.kubun==="日月")});
+      rows: mk(out.filter(r=> !r.su && !r.mo), monCln)});
     sections.push(
       {key:"土のみ", mark:"🔵", color:"var(--blue)", title:"土曜のみ空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
-        rows:out.filter(r=>r.kubun==="土のみ")},
+        rows: mk(out.filter(r=> !r.so && r.su), sunCln)},
       {key:"日のみ", mark:"🟡", color:"var(--yellow)", title:"日曜のみ空室",
         note: monHoliday ? monNote : "掃除は月曜日以降なので気にしないでOK",
         hasC: monHoliday, colLabel:"月曜(祝日)同建物クリーナー",
-        rows:out.filter(r=>r.kubun==="日のみ")}
+        rows: mk(out.filter(r=> monHoliday ? (r.so && !r.su && r.mo) : (r.so && !r.su)), monHoliday ? monCln : null)}
     );
     if(monHoliday) sections.push({key:"月のみ", mark:"🟣", color:"var(--purple)", title:"月曜(祝日)のみ空室",
       note:"掃除は火曜日以降なので気にしないでOK", hasC:false, colLabel:"",
-      rows:out.filter(r=>r.kubun==="月のみ")});
+      rows: mk(out.filter(r=> r.so && r.su && !r.mo), null)});
     return {sections, sat:satStr, sun};
   }
 
