@@ -6,7 +6,7 @@
 <title>週末清掃確認</title>
 <style>
   :root{ --ink:#1e2233; --sub:#6b7280; --line:#e3e6ef; --head:#eef0fb; --accent:#4f46e5;
-         --green:#4CAF50; --blue:#2196F3; --yellow:#FFC107; --purple:#7e57c2; --red:#c62828; --note:#8a5a00;
+         --green:#4CAF50; --blue:#2196F3; --yellow:#FFC107; --purple:#7e57c2; --orange:#fb8c00; --red:#c62828; --note:#8a5a00;
          --gG:#e7f6ea; --gB:#e6f0fd; --gY:#fef6e0; }
   *{ box-sizing:border-box; }
   body{ margin:0; font-family:"Meiryo","Yu Gothic",system-ui,sans-serif; color:var(--ink);
@@ -250,31 +250,38 @@
         if(ci<=sun && sun<co) su=true;
         if(monHoliday && ci<=mon && mon<co) mo=true; });
       let kubun;
-      if(!so && !su) kubun="土日";
-      else if(!so && su) kubun="土のみ";
-      else if(so && !su) kubun="日のみ";
-      else if(monHoliday && !mo) kubun="月のみ";   // 土日とも埋まり、月(祝)だけ空き
-      else return;                                  // 全て埋まり（月曜が平日なら土日埋まりで除外）
+      if(!so && !su) kubun="土日";                         // 土・日空き（月は不問）
+      else if(monHoliday && so && !su && !mo) kubun="日月"; // 土埋まり、日・月(祝)空き
+      else if(!so && su) kubun="土のみ";                    // 土だけ空き
+      else if(so && !su) kubun="日のみ";                    // 日だけ空き（祝日時は月埋まり）
+      else if(monHoliday && !mo) kubun="月のみ";            // 土日埋まり、月(祝)だけ空き
+      else return;                                          // 全て埋まり（月曜が平日なら土日埋まりで除外）
       let cleaner="";
       if(kubun==="土日" || kubun==="土のみ"){ const b=getBuilding(room);
         cleaner = sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; }
-      else if(kubun==="日のみ" && monHoliday){ const b=getBuilding(room);
+      else if(kubun==="日月" || (kubun==="日のみ" && monHoliday)){ const b=getBuilding(room);
         cleaner = monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; }
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       out.push({room,cleaner,kubun,num,bld});
     });
     out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
     const note=`${md(sun)}(日)OUTの予約が入ったら日曜日の掃除が増えるので要注意`;
+    const monNote=`${md(mon)}(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意`;
     const sections=[
       {key:"土日", mark:"🟢", color:"var(--green)", title:"土日とも空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
         rows:out.filter(r=>r.kubun==="土日")},
+    ];
+    if(monHoliday) sections.push({key:"日月", mark:"🟠", color:"var(--orange)", title:"日月(祝日)とも空室",
+      note:monNote, hasC:true, colLabel:"月曜(祝日)同建物クリーナー",
+      rows:out.filter(r=>r.kubun==="日月")});
+    sections.push(
       {key:"土のみ", mark:"🔵", color:"var(--blue)", title:"土曜のみ空室", note, hasC:true, colLabel:"日曜同建物クリーナー",
         rows:out.filter(r=>r.kubun==="土のみ")},
       {key:"日のみ", mark:"🟡", color:"var(--yellow)", title:"日曜のみ空室",
-        note: monHoliday ? `${md(mon)}(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意` : "掃除は月曜日以降なので気にしないでOK",
+        note: monHoliday ? monNote : "掃除は月曜日以降なので気にしないでOK",
         hasC: monHoliday, colLabel:"月曜(祝日)同建物クリーナー",
-        rows:out.filter(r=>r.kubun==="日のみ")},
-    ];
+        rows:out.filter(r=>r.kubun==="日のみ")}
+    );
     if(monHoliday) sections.push({key:"月のみ", mark:"🟣", color:"var(--purple)", title:"月曜(祝日)のみ空室",
       note:"掃除は火曜日以降なので気にしないでOK", hasC:false, colLabel:"",
       rows:out.filter(r=>r.kubun==="月のみ")});
@@ -333,7 +340,7 @@
   function xesc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
   function exportExcel(){
     if(!state.result) return;
-    const fill={"土日":"#C6EFCE","土のみ":"#BDD7EE","日のみ":"#FFEB9C","月のみ":"#E4D9F5"};
+    const fill={"土日":"#C6EFCE","日月":"#FCE4C6","土のみ":"#BDD7EE","日のみ":"#FFEB9C","月のみ":"#E4D9F5"};
     const B=`<Borders>
       <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
       <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
@@ -347,7 +354,7 @@
     let rowsXml="";
     state.result.sections.forEach(s=>{
       const head=`🟢🔵🟡`; // placeholder not used
-      const mark=s.key==="土日"?"🟢":s.key==="土のみ"?"🔵":s.key==="日のみ"?"🟡":"🟣";
+      const mark=s.key==="土日"?"🟢":s.key==="日月"?"🟠":s.key==="土のみ"?"🔵":s.key==="日のみ"?"🟡":"🟣";
       const title=`${mark} ${s.title}`+(s.note?`   ⚠ ${s.note}`:"");
       rowsXml+=`<Row><Cell ss:MergeAcross="1" ss:StyleID="sec_${s.key}"><Data ss:Type="String">${xesc(title)}</Data></Cell></Row>`;
       if(s.hasC){
@@ -383,7 +390,7 @@ ${rowsXml}
     const g=cv.getContext("2d"); g.scale(SC,SC); g.textBaseline="top";
     g.fillStyle="#ffffff"; g.fillRect(0,0,W,H);
     const L=20, rmW=150, clW=W-L*2-rmW;
-    const colDot={"土日":"#4CAF50","土のみ":"#2196F3","日のみ":"#FFC107","月のみ":"#7e57c2"};
+    const colDot={"土日":"#4CAF50","日月":"#fb8c00","土のみ":"#2196F3","日のみ":"#FFC107","月のみ":"#7e57c2"};
     let y=10;
     secs.forEach(s=>{
       g.fillStyle=colDot[s.key]; g.beginPath(); g.arc(L+8,y+13,8,0,Math.PI*2); g.fill();
