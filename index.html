@@ -6,7 +6,7 @@
 <title>週末清掃確認</title>
 <style>
   :root{ --ink:#1e2233; --sub:#6b7280; --line:#e3e6ef; --head:#eef0fb; --accent:#4f46e5;
-         --green:#4CAF50; --blue:#2196F3; --yellow:#FFC107; --red:#c62828; --note:#8a5a00;
+         --green:#4CAF50; --blue:#2196F3; --yellow:#FFC107; --purple:#7e57c2; --red:#c62828; --note:#8a5a00;
          --gG:#e7f6ea; --gB:#e6f0fd; --gY:#fef6e0; }
   *{ box-sizing:border-box; }
   body{ margin:0; font-family:"Meiryo","Yu Gothic",system-ui,sans-serif; color:var(--ink);
@@ -58,6 +58,16 @@
   .chip button{ border:none; background:#c7cbdb; color:#fff; border-radius:50%; width:16px; height:16px;
                 line-height:16px; text-align:center; cursor:pointer; font-size:11px; padding:0; }
   .chip button:hover{ background:#8a90b5; }
+  .shared-banner{ background:#eaf6ec; border:1px solid #b9e0c0; color:#1b6b34; border-radius:10px;
+                  padding:10px 14px; margin-top:12px; font-size:13px; }
+  .lockpanel{ background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:12px; max-width:440px; }
+  .lockttl{ font-weight:700; margin-bottom:6px; }
+  .lockmsg{ color:var(--sub); font-size:12px; }
+  #lockGen{ margin-top:2px; }
+  .lockrow{ display:flex; gap:8px; margin-top:10px; }
+  .lockrow input{ flex:1; padding:7px 10px; border:1px solid #c7cbdb; border-radius:6px; font:inherit; }
+  .lockrem{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--sub); margin-top:8px; }
+  .lockerr{ color:var(--red); font-size:12px; margin-top:8px; min-height:1em; }
 </style>
 </head>
 <body>
@@ -72,9 +82,24 @@
     <div class="exports">
       <button class="btn btn-ghost" id="btnXls" disabled>Excel出力</button>
       <button class="btn btn-ghost" id="btnJpg" disabled>JPEG出力</button>
+      <button class="btn btn-ghost" id="btnShare" disabled title="個人情報を除いた共有用データ(shared-data.json)を書き出します（管理者用）">共有データ出力</button>
     </div>
   </div>
   <div class="desc">週末（土夜・日夜）に空室の部屋と、その日曜に同じ建物へ来る清掃スタッフを一覧化します。満室の部屋は除外。ブロックは占有として扱います。</div>
+
+  <div id="sharedBanner" class="shared-banner" hidden></div>
+
+  <div id="lockPanel" class="lockpanel" hidden>
+    <div class="lockttl">🔒 このデータは保護されています</div>
+    <div class="lockmsg">閲覧するには合言葉が必要です（管理者から共有された合言葉を入力してください）。</div>
+    <div id="lockGen" class="lockmsg"></div>
+    <div class="lockrow">
+      <input type="password" id="lockInput" placeholder="合言葉を入力" autocomplete="off">
+      <button class="btn btn-primary" id="lockBtn">表示する</button>
+    </div>
+    <label class="lockrem"><input type="checkbox" id="lockRemember" checked> この端末に記憶する</label>
+    <div id="lockErr" class="lockerr"></div>
+  </div>
 
   <details class="holbox" id="holbox">
     <summary>祝日設定 <span id="holCount"></span></summary>
@@ -107,7 +132,8 @@
   <div class="foot">
     判定：占有=「確認済み」または「ブロックされた」の予約がその夜にある部屋。夜Nの占有＝チェックイン≤N＜チェックアウト。システムキャンセルは空室扱い。<br>
     クリーナー：対象「日曜」当日に同じ建物（部屋名の頭で判定・08と10代行等は統合）を清掃するスタッフのみ。無ければ「出勤予定なし」。未割当はそのまま「未割当」と表示。<br>
-    祝日：対象の月曜が祝日（組込みの祝日＋「祝日設定」で追加した日）の場合、日付表示に月曜(祝日)を含め、日曜のみ空室の注意書きが「M/D(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意」に変わり、月曜(祝日)当日の同建物クリーナーを表示します（通常は日曜のみ空室のクリーナーは非表示）。
+    祝日：対象の月曜が祝日（組込みの祝日＋「祝日設定」で追加した日）の場合、日付表示に月曜(祝日)を含め、日曜のみ空室の注意書きが「M/D(月)OUTの予約が入ったら月曜(祝日)の掃除が増えるので要注意」に変わり、月曜(祝日)当日の同建物クリーナーを表示します（通常は日曜のみ空室のクリーナーは非表示）。<br>
+    共有（管理者用）：CSVを取り込み「共有データ出力」→ 合言葉を設定すると、個人情報を除いたうえで暗号化したデータ（shared-data.json）が書き出されます。これをリポジトリに置き、合言葉をスタッフに別途伝えると、合言葉を入力した人だけが最新データを閲覧できます。ゲスト個人情報は含まれず、データも暗号化されるため、URLを知っただけの第三者には内容が見えません。
   </div>
 </div>
 
@@ -217,17 +243,22 @@
       if(!seen[key]){ seen[key]=1; roomList.push([b["物件名"],b["ルームタイプメニュー"]]); } });
     const out=[];
     roomList.forEach(([bld,room])=>{
-      let so=false, su=false;
+      let so=false, su=false, mo=false;
       occ.forEach(b=>{ if(b["物件名"]!==bld || b["ルームタイプメニュー"]!==room) return;
         const ci=nd(b["チェックイン"]), co=nd(b["チェックアウト"]);
         if(ci<=satStr && satStr<co) so=true;
-        if(ci<=sun && sun<co) su=true; });
-      if(so && su) return;
-      const kubun = (!so&&!su)?"土日":(!so?"土のみ":"日のみ");
+        if(ci<=sun && sun<co) su=true;
+        if(monHoliday && ci<=mon && mon<co) mo=true; });
+      let kubun;
+      if(!so && !su) kubun="土日";
+      else if(!so && su) kubun="土のみ";
+      else if(so && !su) kubun="日のみ";
+      else if(monHoliday && !mo) kubun="月のみ";   // 土日とも埋まり、月(祝)だけ空き
+      else return;                                  // 全て埋まり（月曜が平日なら土日埋まりで除外）
       let cleaner="";
-      if(kubun!=="日のみ"){ const b=getBuilding(room);
+      if(kubun==="土日" || kubun==="土のみ"){ const b=getBuilding(room);
         cleaner = sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; }
-      else if(monHoliday){ const b=getBuilding(room);
+      else if(kubun==="日のみ" && monHoliday){ const b=getBuilding(room);
         cleaner = monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; }
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       out.push({room,cleaner,kubun,num,bld});
@@ -244,6 +275,9 @@
         hasC: monHoliday, colLabel:"月曜(祝日)同建物クリーナー",
         rows:out.filter(r=>r.kubun==="日のみ")},
     ];
+    if(monHoliday) sections.push({key:"月のみ", mark:"🟣", color:"var(--purple)", title:"月曜(祝日)のみ空室",
+      note:"掃除は火曜日以降なので気にしないでOK", hasC:false, colLabel:"",
+      rows:out.filter(r=>r.kubun==="月のみ")});
     return {sections, sat:satStr, sun};
   }
 
@@ -261,6 +295,7 @@
       $("range").textContent=r;
     } else $("range").textContent="—";
     refreshHol();
+    $("btnShare").disabled = !(state.bText && state.cText);
     if(!state.bText || !state.cText || !state.sat){
       res.innerHTML=`<div class="empty">予約CSVと清掃CSVを読み込み、対象の土曜を指定してください。</div>`;
       $("btnXls").disabled=true; $("btnJpg").disabled=true; state.result=null; return;
@@ -298,7 +333,7 @@
   function xesc(s){ return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
   function exportExcel(){
     if(!state.result) return;
-    const fill={"土日":"#C6EFCE","土のみ":"#BDD7EE","日のみ":"#FFEB9C"};
+    const fill={"土日":"#C6EFCE","土のみ":"#BDD7EE","日のみ":"#FFEB9C","月のみ":"#E4D9F5"};
     const B=`<Borders>
       <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
       <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/>
@@ -312,7 +347,7 @@
     let rowsXml="";
     state.result.sections.forEach(s=>{
       const head=`🟢🔵🟡`; // placeholder not used
-      const mark=s.key==="土日"?"🟢":s.key==="土のみ"?"🔵":"🟡";
+      const mark=s.key==="土日"?"🟢":s.key==="土のみ"?"🔵":s.key==="日のみ"?"🟡":"🟣";
       const title=`${mark} ${s.title}`+(s.note?`   ⚠ ${s.note}`:"");
       rowsXml+=`<Row><Cell ss:MergeAcross="1" ss:StyleID="sec_${s.key}"><Data ss:Type="String">${xesc(title)}</Data></Cell></Row>`;
       if(s.hasC){
@@ -348,7 +383,7 @@ ${rowsXml}
     const g=cv.getContext("2d"); g.scale(SC,SC); g.textBaseline="top";
     g.fillStyle="#ffffff"; g.fillRect(0,0,W,H);
     const L=20, rmW=150, clW=W-L*2-rmW;
-    const colDot={"土日":"#4CAF50","土のみ":"#2196F3","日のみ":"#FFC107"};
+    const colDot={"土日":"#4CAF50","土のみ":"#2196F3","日のみ":"#FFC107","月のみ":"#7e57c2"};
     let y=10;
     secs.forEach(s=>{
       g.fillStyle=colDot[s.key]; g.beginPath(); g.arc(L+8,y+13,8,0,Math.PI*2); g.fill();
@@ -379,6 +414,101 @@ ${rowsXml}
   function download(blob, name){
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name;
     document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  }
+
+  // ---------- 共有データ（個人情報を除いて書き出し / 読み込み） ----------
+  function csvCell(v){ v=String(v==null?"":v); return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+  // 集計に必要な列だけに絞る（ゲスト氏名・電話・メール等の個人情報は含めない）
+  function stripCsv(text, keep){
+    const rows=parseCSV(text).filter(r=> r.some(c=> c!==""));
+    if(!rows.length) return "";
+    const head=rows[0].map(h=>h.trim());
+    const idx=keep.map(k=> head.indexOf(k));
+    const out=[keep.slice()];
+    for(let i=1;i<rows.length;i++){ out.push(idx.map(j=> j>=0 ? (rows[i][j]!==undefined?rows[i][j]:"") : "")); }
+    return out.map(r=> r.map(csvCell).join(",")).join("\r\n");
+  }
+  const KEEP_B=["状態","チェックイン","チェックアウト","物件名","ルームタイプメニュー"];
+  const KEEP_C=["清掃日","部屋タイプ","クリーナー"];
+  // 暗号化（Web Crypto: AES-GCM 256 + PBKDF2）
+  const PASS_KEY="whv_pass";
+  let pendingEnc=null;
+  function b64e(buf){ let s=""; const b=new Uint8Array(buf); for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
+  function b64d(str){ return Uint8Array.from(atob(str), c=>c.charCodeAt(0)); }
+  async function deriveKey(pass, salt){
+    const km=await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:200000, hash:"SHA-256"},
+      km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+  }
+  async function encryptPayload(obj, pass){
+    const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+    const key=await deriveKey(pass, salt);
+    const ct=await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
+    return { enc:true, v:1, generatedAt:obj.generatedAt, salt:b64e(salt), iv:b64e(iv), data:b64e(ct) };
+  }
+  async function decryptPayload(file, pass){
+    const key=await deriveKey(pass, b64d(file.salt));
+    const pt=await crypto.subtle.decrypt({name:"AES-GCM", iv:b64d(file.iv)}, key, b64d(file.data));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+
+  // 共有データ 書き出し（暗号化）
+  async function exportShared(){
+    if(!state.bText || !state.cText){ alert("予約CSVと清掃CSVの両方を読み込んでから書き出してください。"); return; }
+    const last=localStorage.getItem(PASS_KEY)||"";
+    const pass=prompt("共有データを保護する合言葉を設定してください。\n（この合言葉はスタッフに別途 口頭やチャット等で伝えてください）", last);
+    if(pass===null) return;
+    if(!pass){ alert("合言葉が空のため中止しました。"); return; }
+    localStorage.setItem(PASS_KEY, pass);
+    const payload={ generatedAt:new Date().toLocaleString("ja-JP"),
+      booking:stripCsv(state.bText, KEEP_B), cleaning:stripCsv(state.cText, KEEP_C) };
+    try{
+      const file=await encryptPayload(payload, pass);
+      download(new Blob([JSON.stringify(file)],{type:"application/json"}), "shared-data.json");
+    }catch(e){ alert("暗号化に失敗しました。この画面を https もしくは localhost で開いてから実行してください。"); }
+  }
+
+  // 共有データ 読み込み（自動・解錠）
+  function showSharedBanner(when){
+    const el=$("sharedBanner"); if(!el) return; el.hidden=false;
+    el.textContent=`📌 共有データを読み込み済み（データ基準：${when||"—"}）。新しいCSVを読み込むと上書きされます。`;
+  }
+  function applyShared(d){
+    state.bText=d.booking; state.cText=d.cleaning;
+    $("nameB").innerHTML='<span class="ok">✓ 共有データ 読込済</span>';
+    $("nameC").innerHTML='<span class="ok">✓ 共有データ 読込済</span>';
+    showSharedBanner(d.generatedAt); hideLockPanel(); render();
+  }
+  function showLockPanel(gen){ const el=$("lockPanel"); if(!el) return; el.hidden=false;
+    $("lockGen").textContent = gen?`データ基準：${gen}`:""; $("result").innerHTML=""; const i=$("lockInput"); if(i) i.focus(); }
+  function hideLockPanel(){ const el=$("lockPanel"); if(el) el.hidden=true; }
+  async function tryUnlock(pass){
+    try{ const payload=await decryptPayload(pendingEnc, pass);
+      if(!$("lockRemember") || $("lockRemember").checked) localStorage.setItem(PASS_KEY, pass);
+      applyShared(payload); return true;
+    }catch(e){ return false; }
+  }
+  async function submitPass(){
+    const p=$("lockInput").value; if(!p) return;
+    $("lockErr").textContent="解錠中…";
+    const ok=await tryUnlock(p);
+    $("lockErr").textContent = ok ? "" : "合言葉が違います。もう一度お試しください。";
+  }
+  async function loadShared(){
+    try{
+      const r=await fetch("shared-data.json?_="+Date.now(), {cache:"no-store"});
+      if(!r.ok) return false;
+      const d=await r.json();
+      if(d && d.enc){
+        pendingEnc=d;
+        const saved=localStorage.getItem(PASS_KEY);
+        if(saved && await tryUnlock(saved)) return true;
+        if(saved) localStorage.removeItem(PASS_KEY);
+        showLockPanel(d.generatedAt); return true;
+      }
+      if(d && d.booking && d.cleaning){ applyShared(d); return true; } // 平文（後方互換）
+    }catch(e){}
+    return false;
   }
 
   // ---------- file loading + auto-detect ----------
@@ -433,10 +563,14 @@ ${rowsXml}
   $("thisweek").addEventListener("click",()=>{ $("sat").value=upcomingSaturday(); state.sat=$("sat").value; render(); });
   $("btnXls").addEventListener("click",exportExcel);
   $("btnJpg").addEventListener("click",exportJpeg);
+  $("btnShare").addEventListener("click",exportShared);
+  $("lockBtn").addEventListener("click",submitPass);
+  $("lockInput").addEventListener("keydown",e=>{ if(e.key==="Enter") submitPass(); });
   render();
+  loadShared(); // 公開時: shared-data.json があれば自動読込（暗号化なら合言葉で解錠）
 
   // テスト用に公開
-  window.__app={ compute, parseCSV, getBuilding, run:(b,c,s)=>compute(b,c,s) };
+  window.__app={ compute, parseCSV, getBuilding, stripCsv, run:(b,c,s)=>compute(b,c,s) };
 })();
 </script>
 </body>
