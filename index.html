@@ -81,6 +81,7 @@
   .mk-x{ color:#c4c8d4; }
   table.gridtbl .noterow th{ border:none; background:#fff; padding:4px 8px 1px; }
   table.gridtbl{ table-layout:fixed; width:auto; }
+  table.gridtbl .noterow th.lg{ border:none; background:#fff; color:var(--sub); font-weight:400; font-size:11px; text-align:left; vertical-align:bottom; padding:4px 8px 2px; }
   table.gridtbl .noterow th.nt{ color:var(--note); font-weight:400; font-size:10.5px; text-align:left; white-space:normal; line-height:1.4; vertical-align:bottom; word-break:break-all; }
   table.gridtbl td.rm{ white-space:nowrap; }
   .gridfoot{ color:var(--note); font-size:11.5px; margin-top:10px; line-height:1.55; }
@@ -107,7 +108,6 @@
     <span class="viewlbl">表示:</span>
     <button class="segbtn" id="viewGrid">曜日別（〇×）</button>
     <button class="segbtn" id="viewSec">区分別</button>
-    <span class="legend" id="legend">〇=空き / ×=満室</span>
   </div>
 
   <div id="sharedBanner" class="shared-banner" hidden></div>
@@ -337,9 +337,8 @@
     $("btnXls").disabled=false; $("btnJpg").disabled=false;
   }
   function updateViewButtons(){
-    const g=$("viewGrid"), s=$("viewSec"), lg=$("legend");
+    const g=$("viewGrid"), s=$("viewSec");
     if(g&&s){ g.classList.toggle("active", state.view==="grid"); s.classList.toggle("active", state.view!=="grid"); }
-    if(lg) lg.style.display = state.view==="grid" ? "" : "none";
   }
   function renderSections(data){
     const res=$("result");
@@ -369,9 +368,9 @@
     const tbl=document.createElement("table"); tbl.className="gridtbl";
     const lead = hol ? 4 : 3;
     const brk = s => escapeHtml(s).replace("予約が入ったら","予約が入ったら<br>");
-    const noteRow=`<tr class="noterow"><th colspan="${lead}"></th><th class="nt cln">⚠ ${brk(data.note)}</th>${hol?`<th class="nt cln">⚠ ${brk(data.monNote)}</th>`:''}</tr>`;
+    const noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${hol?3:2}">〇=空き</th><th class="nt cln">⚠ ${brk(data.note)}</th>${hol?`<th class="nt cln">⚠ ${brk(data.monNote)}</th>`:''}</tr>`;
     const dSat=`${md(data.sat)}(土)`, dSun=`${md(addDays(data.sat,1))}(日)`, dMon=`${md(addDays(data.sat,2))}(月・祝)`;
-    const head=`<tr><th class="rm">部屋</th><th class="c">${dSat}</th><th class="c">${dSun}</th>${hol?`<th class="c">${dMon}</th>`:''}<th class="cln">日曜クリーナー</th>${hol?'<th class="cln">月(祝)クリーナー</th>':''}</tr>`;
+    const head=`<tr><th class="rm">部屋</th><th class="c">${dSat}</th><th class="c">${dSun}</th>${hol?`<th class="c">${dMon}</th>`:''}<th class="cln">日曜日同建物クリーナー</th>${hol?'<th class="cln">月曜日（祝）同建物クリーナー</th>':''}</tr>`;
     const cell=v=> v ? '<span class="mk-x">×</span>' : '<span class="mk-o">〇</span>';
     const clc=v=> v==="出勤予定なし" ? "cln none" : "cln";
     let body="";
@@ -441,14 +440,16 @@ ${rowsXml}
       <Style ss:ID="cellR"><Font ss:Color="#C62828"/>${B}</Style>
       <Style ss:ID="ok"><Font ss:Color="#1B8A3A" ss:Bold="1"/><Alignment ss:Horizontal="Center"/>${B}</Style>
       <Style ss:ID="ng"><Font ss:Color="#AEB2C0"/><Alignment ss:Horizontal="Center"/>${B}</Style>
-      <Style ss:ID="nt"><Font ss:Color="#8A5A00" ss:Size="9"/><Alignment ss:WrapText="1" ss:Vertical="Top"/></Style>`;
+      <Style ss:ID="nt"><Font ss:Color="#8A5A00" ss:Size="9"/><Alignment ss:WrapText="1" ss:Vertical="Top"/></Style>
+      <Style ss:ID="lg"><Font ss:Color="#6B7280" ss:Size="9"/></Style>`;
     const dSat=`${md(state.result.sat)}(土)`, dSun=`${md(addDays(state.result.sat,1))}(日)`, dMon=`${md(addDays(state.result.sat,2))}(月・祝)`;
-    const cols = hol ? ["部屋",dSat,dSun,dMon,"日曜クリーナー","月(祝)クリーナー"] : ["部屋",dSat,dSun,"日曜クリーナー"];
+    const cols = hol ? ["部屋",dSat,dSun,dMon,"日曜日同建物クリーナー","月曜日（祝）同建物クリーナー"] : ["部屋",dSat,dSun,"日曜日同建物クリーナー"];
     const head=`<Row>`+cols.map(c=>`<Cell ss:StyleID="hdr"><Data ss:Type="String">${xesc(c)}</Data></Cell>`).join("")+`</Row>`;
     const lead = hol ? 4 : 3;
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     const noteCell = nt => `<Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(two(nt)[0])}&#10;${xesc(two(nt)[1])}</Data></Cell>`;
-    const noteRow=`<Row ss:Height="30">`+Array(lead).fill("<Cell/>").join("")+noteCell(state.result.note)+(hol?noteCell(state.result.monNote):"")+`</Row>`;
+    const legCell=`<Cell ss:StyleID="lg"><Data ss:Type="String">〇=空き</Data></Cell>`;
+    const noteRow=`<Row ss:Height="30"><Cell/>`+legCell+(hol?`<Cell/><Cell/>`:`<Cell/>`)+noteCell(state.result.note)+(hol?noteCell(state.result.monNote):"")+`</Row>`;
     const foot = hol ? `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(md(addDays(state.result.sat,2)))}(月)のみ空室&#10;掃除は火曜日以降なので気にしないでOK</Data></Cell></Row>` : "";
     const mkc = free => `<Cell ss:StyleID="${free?'ok':'ng'}"><Data ss:Type="String">${free?'〇':'×'}</Data></Cell>`;
     const cls = v => v==="出勤予定なし" ? "cellR" : "cell";
@@ -458,8 +459,8 @@ ${rowsXml}
       + mkc(!r.so) + mkc(!r.su) + (hol?mkc(!r.mo):"")
       + `<Cell ss:StyleID="${cls(r.sunCln)}"><Data ss:Type="String">${xesc(r.sunCln)}</Data></Cell>`
       + (hol?`<Cell ss:StyleID="${cls(r.monCln)}"><Data ss:Type="String">${xesc(r.monCln)}</Data></Cell>`:"") + `</Row>`; });
-    const colDefs = hol ? '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="64"/><Column ss:Width="150"/><Column ss:Width="150"/>'
-                        : '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="150"/>';
+    const colDefs = hol ? '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="64"/><Column ss:Width="160"/><Column ss:Width="170"/>'
+                        : '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="160"/>';
     const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
@@ -511,9 +512,9 @@ ${rowsXml}
     const sat=state.result.sat, sun=addDays(sat,1), mon=addDays(sat,2);
     const cols=[{t:"部屋",w:110,c:false},{t:`${md(sat)}(土)`,w:72,c:true},{t:`${md(sun)}(日)`,w:72,c:true}];
     if(hol) cols.push({t:`${md(mon)}(月・祝)`,w:92,c:true});
-    cols.push({t:"日曜クリーナー",w:200,c:false});
-    if(hol) cols.push({t:"月(祝)クリーナー",w:200,c:false});
-    const L=20, rowH=30, colH=32, titleH=40, noteH=34, footH=(hol?42:0);
+    cols.push({t:"日曜日同建物クリーナー",w:210,c:false});
+    if(hol) cols.push({t:"月曜日（祝）同建物クリーナー",w:220,c:false});
+    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=(hol?42:0);
     const W=L*2+cols.reduce((a,c)=>a+c.w,0);
     const n=Math.max(rows.length,1);
     const H=10+titleH+noteH+colH+n*rowH+16+footH;
@@ -524,11 +525,12 @@ ${rowsXml}
     let y=10;
     g.fillStyle="#1e2233"; g.font="bold 14px Meiryo,sans-serif";
     g.fillText(`週末清掃確認　${md(sat)}(土)～${md(sun)}(日)${hol?"　・　"+md(mon)+"(月・祝)":""}`, L, y);
-    g.fillStyle="#6b7280"; g.font="11px Meiryo,sans-serif"; g.fillText("〇=空き / ×=満室", L, y+20);
     y+=titleH;
     // 注意書き帯（クリーナー列の上・2行）
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
-    g.textAlign="left"; g.font="9.5px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
+    g.textAlign="left";
+    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空き", xs[1]+2, y+16);
+    g.font="9.5px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
     const sn=two(state.result.note);
     g.fillText("⚠ "+sn[0], xs[hol?4:3]+2, y+3); g.fillText(sn[1], xs[hol?4:3]+12, y+16);
     if(hol){ const mn=two(state.result.monNote); g.fillText("⚠ "+mn[0], xs[5]+2, y+3); g.fillText(mn[1], xs[5]+12, y+16); }
