@@ -386,7 +386,7 @@
     const tbl=document.createElement("table"); tbl.className="gridtbl";
     const lead = hol ? 4 : 3;
     const brk = s => escapeHtml(s).replace("予約が入ったら","予約が入ったら<br>");
-    const noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${hol?3:2}">〇=空き</th><th class="nt cln">⚠ ${brk(data.note)}</th>${hol?`<th class="nt cln">⚠ ${brk(data.monNote)}</th>`:''}</tr>`;
+    const noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${hol?3:2}">〇=空室</th><th class="nt cln">⚠ ${brk(data.note)}</th>${hol?`<th class="nt cln">⚠ ${brk(data.monNote)}</th>`:''}</tr>`;
     const dSat=`${md(data.sat)}(土)`, dSun=`${md(addDays(data.sat,1))}(日)`, dMon=`${md(addDays(data.sat,2))}(月・祝)`;
     const head=`<tr><th class="rm">部屋</th><th class="c">${dSat}</th><th class="c">${dSun}</th>${hol?`<th class="c">${dMon}</th>`:''}<th class="cln">日曜日同建物クリーナー</th>${hol?'<th class="cln">月曜日（祝）同建物クリーナー</th>':''}</tr>`;
     const cell=v=> v ? '<span class="mk-x">×</span>' : '<span class="mk-o">〇</span>';
@@ -467,7 +467,7 @@ ${rowsXml}
     const lead = hol ? 4 : 3;
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     const noteCell = nt => `<Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(two(nt)[0])}&#10;${xesc(two(nt)[1])}</Data></Cell>`;
-    const legCell=`<Cell ss:StyleID="lg"><Data ss:Type="String">〇=空き</Data></Cell>`;
+    const legCell=`<Cell ss:StyleID="lg"><Data ss:Type="String">〇=空室</Data></Cell>`;
     const noteRow=`<Row ss:Height="30"><Cell/>`+legCell+(hol?`<Cell/><Cell/>`:`<Cell/>`)+noteCell(state.result.note)+(hol?noteCell(state.result.monNote):"")+`</Row>`;
     const fl = footNote(state.result.sat, hol);
     const foot = `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(fl[0])}&#10;${xesc(fl[1])}</Data></Cell></Row>`;
@@ -549,7 +549,7 @@ ${rowsXml}
     // 注意書き帯（クリーナー列の上・2行）
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     g.textAlign="left";
-    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空き", xs[1]+2, y+16);
+    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空室", xs[1]+2, y+16);
     g.font="9.5px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
     const sn=two(state.result.note);
     g.fillText("⚠ "+sn[0], xs[hol?4:3]+2, y+3); g.fillText(sn[1], xs[hol?4:3]+12, y+16);
