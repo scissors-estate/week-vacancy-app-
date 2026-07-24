@@ -235,6 +235,11 @@
     if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
     return p;
   }
+  // 並び順用の施設名：部屋名の数字より前を取り出す（亀有1003→亀有、SC201→SC、梅島103_新→梅島）
+  function facilityKey(room){
+    const p=String(room).match(/^\D*/)[0].replace(/[\s_\-―－]+$/,"");
+    return p || String(room);
+  }
 
   // ---------- 集計本体 ----------
   function compute(bookingText, cleaningText, satStr){
@@ -277,7 +282,14 @@
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       out.push({room, num, so, su, mo});
     });
-    out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    // 同じ施設の部屋がまとまるよう、施設単位で並べる。
+    // 施設の登場順は物件名の番号が最も小さいものを基準にし、施設内は部屋番号順（数値順）。
+    const facMin={};
+    out.forEach(r=>{ const f=facilityKey(r.room);
+      if(facMin[f]===undefined || r.num<facMin[f]) facMin[f]=r.num; });
+    out.sort((a,b)=>{ const fa=facilityKey(a.room), fb=facilityKey(b.room);
+      return facMin[fa]-facMin[fb] || fa.localeCompare(fb,"ja")
+          || String(a.room).localeCompare(String(b.room),"ja",{numeric:true}); });
     const sunCln = room => { const b=getBuilding(room); return sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; };
     const monCln = room => { const b=getBuilding(room); return monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; };
     const mk = (rows, cln) => rows.map(r=> ({room:r.room, cleaner: cln ? cln(r.room) : ""}));
