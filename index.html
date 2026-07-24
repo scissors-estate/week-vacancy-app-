@@ -235,6 +235,12 @@
     if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
     return p;
   }
+  // 一覧表の左下の注記（2行）。月曜が祝日の週末は月曜基準、通常の週末は日曜基準。
+  function footNote(sat, hol){
+    return hol
+      ? [`${md(addDays(sat,2))}(月)のみ空室`, "掃除は火曜日以降なので気にしないでOK"]
+      : [`${md(addDays(sat,1))}(日)のみ空室`, "掃除は月曜日以降なので気にしないでOK"];
+  }
   // 並び順用の施設名：部屋名の数字より前を取り出す（亀有1003→亀有、SC201→SC、梅島103_新→梅島）
   function facilityKey(room){
     const p=String(room).match(/^\D*/)[0].replace(/[\s_\-―－]+$/,"");
@@ -394,8 +400,9 @@
     tbl.innerHTML=colg+noteRow+head+body;
     const wrap=document.createElement("div"); wrap.style.overflowX="auto"; wrap.appendChild(tbl);
     res.appendChild(wrap);
-    if(hol){ const fn=document.createElement("div"); fn.className="gridfoot";
-      fn.innerHTML=`⚠ ${md(addDays(data.sat,2))}(月)のみ空室<br>掃除は火曜日以降なので気にしないでOK`;
+    { const fl=footNote(data.sat, hol);
+      const fn=document.createElement("div"); fn.className="gridfoot";
+      fn.innerHTML=`⚠ ${escapeHtml(fl[0])}<br>${escapeHtml(fl[1])}`;
       res.appendChild(fn); }
   }
   function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -462,7 +469,8 @@ ${rowsXml}
     const noteCell = nt => `<Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(two(nt)[0])}&#10;${xesc(two(nt)[1])}</Data></Cell>`;
     const legCell=`<Cell ss:StyleID="lg"><Data ss:Type="String">〇=空き</Data></Cell>`;
     const noteRow=`<Row ss:Height="30"><Cell/>`+legCell+(hol?`<Cell/><Cell/>`:`<Cell/>`)+noteCell(state.result.note)+(hol?noteCell(state.result.monNote):"")+`</Row>`;
-    const foot = hol ? `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(md(addDays(state.result.sat,2)))}(月)のみ空室&#10;掃除は火曜日以降なので気にしないでOK</Data></Cell></Row>` : "";
+    const fl = footNote(state.result.sat, hol);
+    const foot = `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(fl[0])}&#10;${xesc(fl[1])}</Data></Cell></Row>`;
     const mkc = free => `<Cell ss:StyleID="${free?'ok':'ng'}"><Data ss:Type="String">${free?'〇':'×'}</Data></Cell>`;
     const cls = v => v==="出勤予定なし" ? "cellR" : "cell";
     let body="";
@@ -526,7 +534,7 @@ ${rowsXml}
     if(hol) cols.push({t:`${md(mon)}(月・祝)`,w:92,c:true});
     cols.push({t:"日曜日同建物クリーナー",w:210,c:false});
     if(hol) cols.push({t:"月曜日（祝）同建物クリーナー",w:220,c:false});
-    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=(hol?42:0);
+    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=42;
     const W=L*2+cols.reduce((a,c)=>a+c.w,0);
     const n=Math.max(rows.length,1);
     const H=10+titleH+noteH+colH+n*rowH+16+footH;
@@ -562,9 +570,10 @@ ${rowsXml}
         else { g.textAlign="left"; g.font="12.5px Meiryo,sans-serif"; g.fillStyle=(cell.v==="出勤予定なし")?"#c62828":"#1e2233"; g.fillText(cell.v||"",xs[i]+8,y+8); } });
       g.textAlign="left"; y+=rowH;
     });
-    if(hol){ y+=10; g.textAlign="left"; g.font="11px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
-      g.fillText(`⚠ ${md(addDays(state.result.sat,2))}(月)のみ空室`, L, y);
-      g.fillText("掃除は火曜日以降なので気にしないでOK", L+14, y+15); }
+    { y+=10; g.textAlign="left"; g.font="11px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
+      const fl=footNote(state.result.sat, hol);
+      g.fillText(`⚠ ${fl[0]}`, L, y);
+      g.fillText(fl[1], L+14, y+15); }
     cv.toBlob(b=> download(b, `空室_曜日別_${state.result.sat}.jpg`), "image/jpeg", 0.92);
   }
 
