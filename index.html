@@ -235,17 +235,6 @@
     if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
     return p;
   }
-  // 一覧表の左下の注記（2行）。月曜が祝日の週末は月曜基準、通常の週末は日曜基準。
-  function footNote(sat, hol){
-    return hol
-      ? [`${md(addDays(sat,2))}(月)のみ空室`, "掃除は火曜日以降なので気にしないでOK"]
-      : [`${md(addDays(sat,1))}(日)のみ空室`, "掃除は月曜日以降なので気にしないでOK"];
-  }
-  // 並び順用の施設名：部屋名の数字より前を取り出す（亀有1003→亀有、SC201→SC、梅島103_新→梅島）
-  function facilityKey(room){
-    const p=String(room).match(/^\D*/)[0].replace(/[\s_\-―－]+$/,"");
-    return p || String(room);
-  }
 
   // ---------- 集計本体 ----------
   function compute(bookingText, cleaningText, satStr){
@@ -288,14 +277,7 @@
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       out.push({room, num, so, su, mo});
     });
-    // 同じ施設の部屋がまとまるよう、施設単位で並べる。
-    // 施設の登場順は物件名の番号が最も小さいものを基準にし、施設内は部屋番号順（数値順）。
-    const facMin={};
-    out.forEach(r=>{ const f=facilityKey(r.room);
-      if(facMin[f]===undefined || r.num<facMin[f]) facMin[f]=r.num; });
-    out.sort((a,b)=>{ const fa=facilityKey(a.room), fb=facilityKey(b.room);
-      return facMin[fa]-facMin[fb] || fa.localeCompare(fb,"ja")
-          || String(a.room).localeCompare(String(b.room),"ja",{numeric:true}); });
+    out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
     const sunCln = room => { const b=getBuilding(room); return sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; };
     const monCln = room => { const b=getBuilding(room); return monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; };
     const mk = (rows, cln) => rows.map(r=> ({room:r.room, cleaner: cln ? cln(r.room) : ""}));
@@ -321,10 +303,38 @@
     if(monHoliday) sections.push({key:"月のみ", mark:"🟣", color:"var(--purple)", title:"月曜(祝日)のみ空室",
       note:"掃除は火曜日以降なので気にしないでOK", hasC:false, colLabel:"",
       rows: mk(out.filter(r=> r.so && r.su && !r.mo), null)});
-    // 曜日グリッド用（空室の全部屋・各夜の空き有無＋同建物クリーナー）
-    const grid = out.map(r => ({ room:r.room, so:r.so, su:r.su, mo:r.mo,
-      sunCln:(b=> sunByBld[b]?[...sunByBld[b]].join("、"):"出勤予定なし")(getBuilding(r.room)),
-      monCln:(b=> monByBld[b]?[...monByBld[b]].join("、"):"出勤予定なし")(getBuilding(r.room)) }));
+    // ===== 曜日別グリッド（連休＋週末の対象日）=====
+    // 対象日 = 土日を中心に、前後の連続する祝日（祝日設定＋組込み）を含める
+    const WD=["日","月","火","水","木","金","土"];
+    const dayList=[];
+    { let d=addDays(satStr,-1); const back=[];
+      while(isHoliday(d)){ back.unshift(d); d=addDays(d,-1); }
+      back.forEach(x=>dayList.push(x)); dayList.push(satStr, sun);
+      d=addDays(sun,1); while(isHoliday(d)){ dayList.push(d); d=addDays(d,1); } }
+    const dayMeta=dayList.map(ymd=>{ const wd=WD[new Date(ymd+"T00:00:00").getDay()], hol=isHoliday(ymd), jp=isJpHoliday(ymd), hw=jp?"祝":"盆休";
+      return { ymd, wd, hol, jp, hw, label:`${md(ymd)}(${wd}${hol?"・"+hw:""})` }; });
+    const clnByDay=dayList.map(ymd=>{ const m={};
+      cleaning.forEach(c=>{ if(nd(c["清掃日"])!==ymd) return; const nm=(c["クリーナー"]||"").trim(); if(!nm) return;
+        const b=getBuilding(c["部屋タイプ"]); (m[b]=m[b]||new Set()).add(nm); }); return m; });
+    // クリーナー列＝最初の日を除く各対象日
+    const clnCols=dayMeta.slice(1).map((dm,k)=>({ dayIdx:k+1,
+      label:`${dm.wd}曜日${dm.hol?"（"+dm.hw+"）":""}同建物クリーナー`,
+      note:`${md(dm.ymd)}(${dm.wd})OUTの予約が入ったら${dm.wd}曜${dm.hol?(dm.jp?"(祝日)":"(盆休)"):"日"}の掃除が増えるので要注意` }));
+    const gridRows=[];
+    roomList.forEach(([bld,room])=>{
+      const bks=occ.filter(x=> x["物件名"]===bld && x["ルームタイプメニュー"]===room);
+      const occDays=dayList.map(ymd=> bks.some(x=>{ const ci=nd(x["チェックイン"]),co=nd(x["チェックアウト"]); return ci<=ymd && ymd<co; }));
+      if(occDays.every(v=>v)) return;
+      const b=getBuilding(room);
+      const clns=clnCols.map(cc=>{ const s=clnByDay[cc.dayIdx][b]; return s?[...s].join("、"):"出勤予定なし"; });
+      const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
+      gridRows.push({ room, num, occ:occDays, clns });
+    });
+    gridRows.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    let gridFoot=null;
+    if(dayMeta.length>2){ const last=dayMeta[dayMeta.length-1], nxt=addDays(last.ymd,1), nwd=WD[new Date(nxt+"T00:00:00").getDay()];
+      gridFoot=`${md(last.ymd)}(${last.wd})のみ空室の場合、掃除は${nwd}曜日以降なので気にしないでOK`; }
+    const grid={ days:dayMeta, clnCols, rows:gridRows, foot:gridFoot };
     return {sections, grid, monHoliday, note, monNote, sat:satStr, sun};
   }
 
@@ -336,9 +346,12 @@
   function render(){
     const res=$("result"); res.innerHTML="";
     if(state.sat){
-      const sun=addDays(state.sat,1), mon=addDays(state.sat,2);
-      let r=`${md(state.sat)}(土)～${md(sun)}(日)`;
-      if(isHoliday(mon)) r+=`　・　${md(mon)}（月・祝）`;
+      const sat=state.sat, sun=addDays(sat,1), mon=addDays(sat,2), WDr=["日","月","火","水","木","金","土"];
+      let d=addDays(sat,-1); const back=[];
+      while(isHoliday(d)){ back.unshift(d); d=addDays(d,-1); }
+      let pre=""; back.forEach(x=>{ pre+=`${md(x)}（${WDr[new Date(x+"T00:00:00").getDay()]}・${isJpHoliday(x)?"祝":"盆休"}）　・　`; });
+      let r=pre+`${md(sat)}(土)～${md(sun)}(日)`;
+      if(isHoliday(mon)) r+=`　・　${md(mon)}（月・${isJpHoliday(mon)?"祝":"盆休"}）`;
       $("range").textContent=r;
     } else $("range").textContent="—";
     refreshHol();
@@ -382,27 +395,39 @@
     });
   }
   function renderGrid(data){
-    const res=$("result"), hol=data.monHoliday;
+    const res=$("result"), G=data.grid, nd=G.days.length, nc=G.clnCols.length;
     const tbl=document.createElement("table"); tbl.className="gridtbl";
-    const lead = hol ? 4 : 3;
     const brk = s => escapeHtml(s).replace("予約が入ったら","予約が入ったら<br>");
-    const noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${hol?3:2}">〇=空室</th><th class="nt cln">⚠ ${brk(data.note)}</th>${hol?`<th class="nt cln">⚠ ${brk(data.monNote)}</th>`:''}</tr>`;
-    const dSat=`${md(data.sat)}(土)`, dSun=`${md(addDays(data.sat,1))}(日)`, dMon=`${md(addDays(data.sat,2))}(月・祝)`;
-    const head=`<tr><th class="rm">部屋</th><th class="c">${dSat}</th><th class="c">${dSun}</th>${hol?`<th class="c">${dMon}</th>`:''}<th class="cln">日曜日同建物クリーナー</th>${hol?'<th class="cln">月曜日（祝）同建物クリーナー</th>':''}</tr>`;
+    // colgroup
+    let colg="<colgroup><col style='width:100px'>";
+    for(let i=0;i<nd;i++) colg+="<col style='width:78px'>";
+    for(let i=0;i<nc;i++) colg+="<col style='width:150px'>";
+    colg+="</colgroup>";
+    // 注意書き行：日付列の上に「〇=空き」、各クリーナー列の上に注意書き
+    let noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${nd}">〇=空き</th>`;
+    G.clnCols.forEach(cc=> noteRow+=`<th class="nt cln">⚠ ${brk(cc.note)}</th>`);
+    noteRow+="</tr>";
+    // 見出し行
+    let head=`<tr><th class="rm">部屋</th>`;
+    G.days.forEach(dm=> head+=`<th class="c">${escapeHtml(dm.label)}</th>`);
+    G.clnCols.forEach(cc=> head+=`<th class="cln">${escapeHtml(cc.label)}</th>`);
+    head+="</tr>";
+    // 本体
     const cell=v=> v ? '<span class="mk-x">×</span>' : '<span class="mk-o">〇</span>';
     const clc=v=> v==="出勤予定なし" ? "cln none" : "cln";
     let body="";
-    if(!data.grid.length){ const span=2+(hol?1:0)+1+(hol?1:0); body=`<tr><td class="rm" style="color:var(--sub)">なし</td><td colspan="${span}"></td></tr>`; }
-    else data.grid.forEach(r=>{
-      body+=`<tr><td class="rm">${escapeHtml(r.room)}</td><td class="c">${cell(r.so)}</td><td class="c">${cell(r.su)}</td>${hol?`<td class="c">${cell(r.mo)}</td>`:''}<td class="${clc(r.sunCln)}">${escapeHtml(r.sunCln)}</td>${hol?`<td class="${clc(r.monCln)}">${escapeHtml(r.monCln)}</td>`:''}</tr>`;
+    if(!G.rows.length){ body=`<tr><td class="rm" style="color:var(--sub)">なし</td><td colspan="${nd+nc}"></td></tr>`; }
+    else G.rows.forEach(r=>{
+      body+=`<tr><td class="rm">${escapeHtml(r.room)}</td>`;
+      r.occ.forEach(o=> body+=`<td class="c">${cell(o)}</td>`);
+      r.clns.forEach(cl=> body+=`<td class="${clc(cl)}">${escapeHtml(cl)}</td>`);
+      body+="</tr>";
     });
-    const colg=`<colgroup><col style="width:100px"><col style="width:74px"><col style="width:74px">${hol?'<col style="width:86px">':''}<col style="width:150px">${hol?'<col style="width:150px">':''}</colgroup>`;
     tbl.innerHTML=colg+noteRow+head+body;
     const wrap=document.createElement("div"); wrap.style.overflowX="auto"; wrap.appendChild(tbl);
     res.appendChild(wrap);
-    { const fl=footNote(data.sat, hol);
-      const fn=document.createElement("div"); fn.className="gridfoot";
-      fn.innerHTML=`⚠ ${escapeHtml(fl[0])}<br>${escapeHtml(fl[1])}`;
+    if(G.foot){ const fn=document.createElement("div"); fn.className="gridfoot";
+      fn.innerHTML="⚠ "+escapeHtml(G.foot).replace("の場合、","の場合、<br>");
       res.appendChild(fn); }
   }
   function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -452,35 +477,31 @@ ${rowsXml}
     download(new Blob([xml],{type:"application/vnd.ms-excel;charset=utf-8"}), `空室_クリーナー一覧_${state.sat}.xls`);
   }
   function exportExcelGrid(){
-    const rows=state.result.grid, hol=state.result.monHoliday;
+    const G=state.result.grid, nd=G.days.length, nc=G.clnCols.length;
     const B=`<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#B4B4B4"/></Borders>`;
-    const styles=`<Style ss:ID="hdr"><Font ss:Bold="1"/><Interior ss:Color="#E6E6E6" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/>${B}</Style>
+    const styles=`<Style ss:ID="hdr"><Font ss:Bold="1"/><Interior ss:Color="#E6E6E6" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:WrapText="1"/>${B}</Style>
       <Style ss:ID="cell">${B}</Style>
       <Style ss:ID="cellR"><Font ss:Color="#C62828"/>${B}</Style>
       <Style ss:ID="ok"><Font ss:Color="#1B8A3A" ss:Bold="1"/><Alignment ss:Horizontal="Center"/>${B}</Style>
       <Style ss:ID="ng"><Font ss:Color="#AEB2C0"/><Alignment ss:Horizontal="Center"/>${B}</Style>
       <Style ss:ID="nt"><Font ss:Color="#8A5A00" ss:Size="9"/><Alignment ss:WrapText="1" ss:Vertical="Top"/></Style>
       <Style ss:ID="lg"><Font ss:Color="#6B7280" ss:Size="9"/></Style>`;
-    const dSat=`${md(state.result.sat)}(土)`, dSun=`${md(addDays(state.result.sat,1))}(日)`, dMon=`${md(addDays(state.result.sat,2))}(月・祝)`;
-    const cols = hol ? ["部屋",dSat,dSun,dMon,"日曜日同建物クリーナー","月曜日（祝）同建物クリーナー"] : ["部屋",dSat,dSun,"日曜日同建物クリーナー"];
+    const cols = ["部屋", ...G.days.map(d=>d.label), ...G.clnCols.map(c=>c.label)];
     const head=`<Row>`+cols.map(c=>`<Cell ss:StyleID="hdr"><Data ss:Type="String">${xesc(c)}</Data></Cell>`).join("")+`</Row>`;
-    const lead = hol ? 4 : 3;
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     const noteCell = nt => `<Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(two(nt)[0])}&#10;${xesc(two(nt)[1])}</Data></Cell>`;
-    const legCell=`<Cell ss:StyleID="lg"><Data ss:Type="String">〇=空室</Data></Cell>`;
-    const noteRow=`<Row ss:Height="30"><Cell/>`+legCell+(hol?`<Cell/><Cell/>`:`<Cell/>`)+noteCell(state.result.note)+(hol?noteCell(state.result.monNote):"")+`</Row>`;
-    const fl = footNote(state.result.sat, hol);
-    const foot = `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(fl[0])}&#10;${xesc(fl[1])}</Data></Cell></Row>`;
+    // 注意書き行：部屋(空)＋日付列に「〇=空き」＋残り日付列(空)＋各クリーナー注意書き
+    const noteRow=`<Row ss:Height="30"><Cell/><Cell ss:StyleID="lg"><Data ss:Type="String">〇=空き</Data></Cell>`
+      + Array(nd-1).fill("<Cell/>").join("") + G.clnCols.map(cc=>noteCell(cc.note)).join("") + `</Row>`;
+    const foot = G.foot ? `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(G.foot).replace("の場合、","の場合、&#10;")}</Data></Cell></Row>` : "";
     const mkc = free => `<Cell ss:StyleID="${free?'ok':'ng'}"><Data ss:Type="String">${free?'〇':'×'}</Data></Cell>`;
     const cls = v => v==="出勤予定なし" ? "cellR" : "cell";
     let body="";
-    if(!rows.length){ body=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell></Row>`; }
-    else rows.forEach(r=>{ body+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell>`
-      + mkc(!r.so) + mkc(!r.su) + (hol?mkc(!r.mo):"")
-      + `<Cell ss:StyleID="${cls(r.sunCln)}"><Data ss:Type="String">${xesc(r.sunCln)}</Data></Cell>`
-      + (hol?`<Cell ss:StyleID="${cls(r.monCln)}"><Data ss:Type="String">${xesc(r.monCln)}</Data></Cell>`:"") + `</Row>`; });
-    const colDefs = hol ? '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="64"/><Column ss:Width="160"/><Column ss:Width="170"/>'
-                        : '<Column ss:Width="84"/><Column ss:Width="52"/><Column ss:Width="52"/><Column ss:Width="160"/>';
+    if(!G.rows.length){ body=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell></Row>`; }
+    else G.rows.forEach(r=>{ body+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell>`
+      + r.occ.map(o=>mkc(!o)).join("")
+      + r.clns.map(cl=>`<Cell ss:StyleID="${cls(cl)}"><Data ss:Type="String">${xesc(cl)}</Data></Cell>`).join("") + `</Row>`; });
+    const colDefs = '<Column ss:Width="84"/>' + G.days.map(()=>'<Column ss:Width="58"/>').join("") + G.clnCols.map(()=>'<Column ss:Width="150"/>').join("");
     const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
@@ -528,15 +549,14 @@ ${rowsXml}
     cv.toBlob(b=> download(b, `空室_クリーナー一覧_${state.sat}.jpg`), "image/jpeg", 0.92);
   }
   function exportJpegGrid(){
-    const rows=state.result.grid, hol=state.result.monHoliday, SC=2;
-    const sat=state.result.sat, sun=addDays(sat,1), mon=addDays(sat,2);
-    const cols=[{t:"部屋",w:110,c:false},{t:`${md(sat)}(土)`,w:72,c:true},{t:`${md(sun)}(日)`,w:72,c:true}];
-    if(hol) cols.push({t:`${md(mon)}(月・祝)`,w:92,c:true});
-    cols.push({t:"日曜日同建物クリーナー",w:210,c:false});
-    if(hol) cols.push({t:"月曜日（祝）同建物クリーナー",w:220,c:false});
-    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=42;
+    const G=state.result.grid, SC=2;
+    const cols=[{t:"部屋",w:110,c:false}];
+    G.days.forEach(dm=> cols.push({t:dm.label, w:78, c:true}));
+    G.clnCols.forEach(cc=> cols.push({t:cc.label, w:150, c:false}));
+    const clnStart=1+G.days.length;
+    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=(G.foot?42:0);
     const W=L*2+cols.reduce((a,c)=>a+c.w,0);
-    const n=Math.max(rows.length,1);
+    const n=Math.max(G.rows.length,1);
     const H=10+titleH+noteH+colH+n*rowH+16+footH;
     const cv=document.createElement("canvas"); cv.width=W*SC; cv.height=H*SC;
     const g=cv.getContext("2d"); g.scale(SC,SC); g.textBaseline="top";
@@ -544,36 +564,37 @@ ${rowsXml}
     const xs=[]; let xx=L; cols.forEach(c=>{ xs.push(xx); xx+=c.w; });
     let y=10;
     g.fillStyle="#1e2233"; g.font="bold 14px Meiryo,sans-serif";
-    g.fillText(`週末清掃確認　${md(sat)}(土)～${md(sun)}(日)${hol?"　・　"+md(mon)+"(月・祝)":""}`, L, y);
+    g.fillText(`週末清掃確認　${G.days[0].label}〜${G.days[G.days.length-1].label}`, L, y);
     y+=titleH;
-    // 注意書き帯（クリーナー列の上・2行）
+    // 注意書き帯：〇=空き（日付列の上）＋各クリーナー列の注意書き（2行）
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     g.textAlign="left";
-    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空室", xs[1]+2, y+16);
-    g.font="9.5px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
-    const sn=two(state.result.note);
-    g.fillText("⚠ "+sn[0], xs[hol?4:3]+2, y+3); g.fillText(sn[1], xs[hol?4:3]+12, y+16);
-    if(hol){ const mn=two(state.result.monNote); g.fillText("⚠ "+mn[0], xs[5]+2, y+3); g.fillText(mn[1], xs[5]+12, y+16); }
+    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空き", xs[1]+2, y+16);
+    g.font="9px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
+    G.clnCols.forEach((cc,k)=>{ const cx=xs[clnStart+k]; const t=two(cc.note);
+      g.fillText("⚠ "+t[0], cx+2, y+3); g.fillText(t[1], cx+10, y+16); });
     y+=noteH;
     g.fillStyle="#eceef5"; g.fillRect(L,y,W-L*2,colH);
-    g.strokeStyle="#b4b4b4"; g.lineWidth=1; g.font="bold 12.5px Meiryo,sans-serif";
+    g.strokeStyle="#b4b4b4"; g.lineWidth=1;
     cols.forEach((c,i)=>{ g.strokeRect(xs[i],y,c.w,colH); g.fillStyle="#1e2233";
-      if(c.c){ g.textAlign="center"; g.fillText(c.t,xs[i]+c.w/2,y+8); } else { g.textAlign="left"; g.fillText(c.t,xs[i]+8,y+8); } });
+      g.font = c.c ? "bold 12px Meiryo,sans-serif" : "bold 10.5px Meiryo,sans-serif";
+      if(c.c){ g.textAlign="center"; g.fillText(c.t,xs[i]+c.w/2,y+9); } else { g.textAlign="left"; g.fillText(c.t,xs[i]+6,y+9); } });
     g.textAlign="left"; y+=colH;
-    if(!rows.length){ g.strokeRect(L,y,W-L*2,rowH); g.fillStyle="#6b7280"; g.font="12.5px Meiryo,sans-serif"; g.fillText("なし",L+8,y+8); }
-    else rows.forEach(r=>{
-      const cells=[{v:r.room},{o:!r.so},{o:!r.su}]; if(hol) cells.push({o:!r.mo});
-      cells.push({v:r.sunCln}); if(hol) cells.push({v:r.monCln});
-      cols.forEach((c,i)=>{ g.strokeRect(xs[i],y,c.w,rowH); const cell=cells[i];
-        if(cell.o!==undefined){ g.textAlign="center"; g.font="bold 14px Meiryo,sans-serif";
-          g.fillStyle=cell.o?"#1b8a3a":"#c4c8d4"; g.fillText(cell.o?"〇":"×",xs[i]+c.w/2,y+6); }
-        else { g.textAlign="left"; g.font="12.5px Meiryo,sans-serif"; g.fillStyle=(cell.v==="出勤予定なし")?"#c62828":"#1e2233"; g.fillText(cell.v||"",xs[i]+8,y+8); } });
-      g.textAlign="left"; y+=rowH;
+    if(!G.rows.length){ g.strokeRect(L,y,W-L*2,rowH); g.fillStyle="#6b7280"; g.font="12.5px Meiryo,sans-serif"; g.fillText("なし",L+8,y+8); }
+    else G.rows.forEach(r=>{
+      // 部屋
+      g.strokeRect(xs[0],y,cols[0].w,rowH); g.textAlign="left"; g.font="12.5px Meiryo,sans-serif"; g.fillStyle="#1e2233"; g.fillText(r.room,xs[0]+6,y+8);
+      // 〇×
+      r.occ.forEach((o,k)=>{ const i=1+k; g.strokeRect(xs[i],y,cols[i].w,rowH); g.textAlign="center"; g.font="bold 14px Meiryo,sans-serif";
+        g.fillStyle=o?"#c4c8d4":"#1b8a3a"; g.fillText(o?"×":"〇",xs[i]+cols[i].w/2,y+6); });
+      // クリーナー
+      r.clns.forEach((cl,k)=>{ const i=clnStart+k; g.strokeRect(xs[i],y,cols[i].w,rowH); g.textAlign="left"; g.font="12px Meiryo,sans-serif";
+        g.fillStyle=(cl==="出勤予定なし")?"#c62828":"#1e2233"; g.fillText(cl,xs[i]+6,y+8); });
+      y+=rowH;
     });
-    { y+=10; g.textAlign="left"; g.font="11px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
-      const fl=footNote(state.result.sat, hol);
-      g.fillText(`⚠ ${fl[0]}`, L, y);
-      g.fillText(fl[1], L+14, y+15); }
+    if(G.foot){ y+=10; g.textAlign="left"; g.font="11px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
+      const fi=G.foot.indexOf("の場合、"); const f0=fi>=0?G.foot.slice(0,fi+4):G.foot, f1=fi>=0?G.foot.slice(fi+4):"";
+      g.fillText("⚠ "+f0, L, y); if(f1) g.fillText(f1, L+14, y+15); }
     cv.toBlob(b=> download(b, `空室_曜日別_${state.result.sat}.jpg`), "image/jpeg", 0.92);
   }
 
