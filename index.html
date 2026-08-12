@@ -560,7 +560,7 @@ ${rowsXml}
     G.days.forEach(dm=> cols.push({t:dm.label, w:78, c:true}));
     G.clnCols.forEach(cc=> cols.push({t:cc.label, w:150, c:false}));
     const clnStart=1+G.days.length;
-    const L=20, rowH=30, colH=32, titleH=28, noteH=34, footH=(G.foot?42:0);
+    const L=20, rowH=30, colH=44, titleH=28, noteH=34, footH=(G.foot?42:0);
     const W=L*2+cols.reduce((a,c)=>a+c.w,0);
     const n=Math.max(G.rows.length,1);
     const H=10+titleH+noteH+colH+n*rowH+16+footH;
@@ -583,8 +583,17 @@ ${rowsXml}
     g.fillStyle="#eceef5"; g.fillRect(L,y,W-L*2,colH);
     g.strokeStyle="#b4b4b4"; g.lineWidth=1;
     cols.forEach((c,i)=>{ g.strokeRect(xs[i],y,c.w,colH); g.fillStyle="#1e2233";
-      g.font = c.c ? "bold 12px Meiryo,sans-serif" : "bold 10.5px Meiryo,sans-serif";
-      if(c.c){ g.textAlign="center"; g.fillText(c.t,xs[i]+c.w/2,y+9); } else { g.textAlign="left"; g.fillText(c.t,xs[i]+6,y+9); } });
+      if(i===0){ // 部屋（1行・縦中央）
+        g.font="bold 12px Meiryo,sans-serif"; g.textAlign="left"; g.fillText(c.t, xs[i]+6, y+16);
+      } else if(c.c){ // 日付列（2行：日付／曜日）
+        g.font="bold 12px Meiryo,sans-serif"; g.textAlign="center";
+        const p=c.t.indexOf("("), l1=p>=0?c.t.slice(0,p):c.t, l2=p>=0?c.t.slice(p):"";
+        g.fillText(l1, xs[i]+c.w/2, y+7); if(l2) g.fillText(l2, xs[i]+c.w/2, y+25);
+      } else { // クリーナー列（2行：曜日〜／同建物クリーナー）
+        g.font="bold 11px Meiryo,sans-serif"; g.textAlign="center";
+        const p=c.t.indexOf("同建物"), l1=p>=0?c.t.slice(0,p):c.t, l2=p>=0?c.t.slice(p):"";
+        g.fillText(l1, xs[i]+c.w/2, y+8); if(l2) g.fillText(l2, xs[i]+c.w/2, y+26);
+      } });
     g.textAlign="left"; y+=colH;
     if(!G.rows.length){ g.strokeRect(L,y,W-L*2,rowH); g.fillStyle="#6b7280"; g.font="12.5px Meiryo,sans-serif"; g.fillText("なし",L+8,y+8); }
     else G.rows.forEach(r=>{
