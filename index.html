@@ -264,6 +264,12 @@
     const seen={}, roomList=[];
     bookings.forEach(b=>{ const key=b["物件名"]+"|"+b["ルームタイプメニュー"];
       if(!seen[key]){ seen[key]=1; roomList.push([b["物件名"],b["ルームタイプメニュー"]]); } });
+    // 建物（部屋名の頭）ごとの代表番号＝所属物件番号の最小値。分割物件(SC=02/09, 青戸=08/10)をまとめる
+    const bldNum={};
+    roomList.forEach(([bld,room])=>{ const b=getBuilding(room), n=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
+      if(bldNum[b]===undefined || n<bldNum[b]) bldNum[b]=n; });
+    const roomCmp=(x,y)=>{ const bx=getBuilding(x), by=getBuilding(y);
+      return (bldNum[bx]-bldNum[by]) || bx.localeCompare(by,"ja") || String(x).localeCompare(String(y),"ja"); };
     const out=[];
     roomList.forEach(([bld,room])=>{
       let so=false, su=false, mo=false;
@@ -277,7 +283,7 @@
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       out.push({room, num, so, su, mo});
     });
-    out.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    out.sort((a,b)=> roomCmp(a.room,b.room));
     const sunCln = room => { const b=getBuilding(room); return sunByBld[b] ? [...sunByBld[b]].join("、") : "出勤予定なし"; };
     const monCln = room => { const b=getBuilding(room); return monByBld[b] ? [...monByBld[b]].join("、") : "出勤予定なし"; };
     const mk = (rows, cln) => rows.map(r=> ({room:r.room, cleaner: cln ? cln(r.room) : ""}));
@@ -330,7 +336,7 @@
       const num=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
       gridRows.push({ room, num, occ:occDays, clns });
     });
-    gridRows.sort((a,b)=> a.num-b.num || String(a.room).localeCompare(String(b.room),"ja"));
+    gridRows.sort((a,b)=> roomCmp(a.room,b.room));
     let gridFoot=null;
     if(dayMeta.length>2){ const last=dayMeta[dayMeta.length-1], nxt=addDays(last.ymd,1), nwd=WD[new Date(nxt+"T00:00:00").getDay()];
       gridFoot=`${md(last.ymd)}(${last.wd})のみ空室の場合、掃除は${nwd}曜日以降なので気にしないでOK`; }
