@@ -578,7 +578,7 @@ ${rowsXml}
     g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空き", xs[1]+2, y+16);
     g.font="8px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
     G.clnCols.forEach((cc,k)=>{ const cx=xs[clnStart+k]; const t=two(cc.note);
-      g.fillText("⚠ "+t[0], cx+2, y+4); g.fillText(t[1], cx+10, y+16); });
+      g.fillText("⚠ "+t[0], cx+2, y+4); g.fillText(t[1], cx+2, y+16); });
     y+=noteH;
     g.fillStyle="#eceef5"; g.fillRect(L,y,W-L*2,colH);
     g.strokeStyle="#b4b4b4"; g.lineWidth=1;
