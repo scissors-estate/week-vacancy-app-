@@ -231,7 +231,8 @@
 
   // ---------- 建物判定（部屋名の頭） ----------
   function getBuilding(room){
-    let p=String(room).replace(/\d+$/,"");
+    let p=String(room).replace(/[_＿].*$/,"");   // 「_新」等の接尾辞を除去（半角/全角アンダースコア）
+    p=p.replace(/\d+$/,"");
     if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
     return p;
   }
