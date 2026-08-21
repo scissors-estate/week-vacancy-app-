@@ -338,7 +338,7 @@
     });
     gridRows.sort((a,b)=> roomCmp(a.room,b.room));
     let gridFoot=null;
-    if(dayMeta.length>2){ const last=dayMeta[dayMeta.length-1], nxt=addDays(last.ymd,1), nwd=WD[new Date(nxt+"T00:00:00").getDay()];
+    if(dayMeta.length>=2){ const last=dayMeta[dayMeta.length-1], nxt=addDays(last.ymd,1), nwd=WD[new Date(nxt+"T00:00:00").getDay()];
       gridFoot=`${md(last.ymd)}(${last.wd})のみ空室の場合、掃除は${nwd}曜日以降なので気にしないでOK`; }
     const grid={ days:dayMeta, clnCols, rows:gridRows, foot:gridFoot };
     return {sections, grid, monHoliday, note, monNote, sat:satStr, sun};
