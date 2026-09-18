@@ -215,6 +215,11 @@
     add(10,nthMon(10,2)); // スポーツの日
     add(3, Math.floor(20.8431+0.242194*(year-1980)-Math.floor((year-1980)/4))); // 春分の日
     add(9, Math.floor(23.2488+0.242194*(year-1980)-Math.floor((year-1980)/4))); // 秋分の日
+    // 国民の休日：前日・翌日がともに祝日で、その日自体が祝日でも日曜でもない日（例：敬老の日と秋分の日に挟まれた9/22）
+    [...set].forEach(ds=>{ const d=new Date(ds+"T00:00:00");
+      const mid=new Date(d); mid.setDate(mid.getDate()+1); const nxt=new Date(d); nxt.setDate(nxt.getDate()+2);
+      const midS=fmtDate(mid), nxtS=fmtDate(nxt);
+      if(set.has(nxtS) && !set.has(midS) && mid.getDay()!==0) set.add(midS); });
     // 振替休日：祝日が日曜なら翌平日（次の非祝日）を休日に
     [...set].sort().forEach(ds=>{ const dt=new Date(ds+"T00:00:00");
       if(dt.getDay()===0){ const n=new Date(dt); do{ n.setDate(n.getDate()+1); }while(set.has(fmtDate(n))); set.add(fmtDate(n)); } });
@@ -263,8 +268,11 @@
     });
     const occ=bookings.filter(b=> b["状態"]==="確認済み" || b["状態"]==="ブロックされた");
     const seen={}, roomList=[];
-    bookings.forEach(b=>{ const key=b["物件名"]+"|"+b["ルームタイプメニュー"];
-      if(!seen[key]){ seen[key]=1; roomList.push([b["物件名"],b["ルームタイプメニュー"]]); } });
+    const isRetired = s => /[_＿]旧/.test(String(s));   // 「_旧」等の旧番号（恒久販売停止）は一覧から除外
+    bookings.forEach(b=>{ const bld=b["物件名"], room=b["ルームタイプメニュー"];
+      if(isRetired(bld) || isRetired(room)) return;
+      const key=bld+"|"+room;
+      if(!seen[key]){ seen[key]=1; roomList.push([bld,room]); } });
     // 建物（部屋名の頭）ごとの代表番号＝所属物件番号の最小値。分割物件(SC=02/09, 青戸=08/10)をまとめる
     const bldNum={};
     roomList.forEach(([bld,room])=>{ const b=getBuilding(room), n=parseInt((String(bld).match(/^\d+/)||["0"])[0],10);
