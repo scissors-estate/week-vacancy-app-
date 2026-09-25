@@ -241,6 +241,8 @@
     if(/[^\x00-\x7F]/.test(p) && /[A-Za-z]$/.test(p)) p=p.replace(/[A-Za-z]$/,"");
     return p;
   }
+  // 部屋名の表示用：末尾の「_新」（半角/全角アンダースコア）を除去（例：梅島103_新 → 梅島103）
+  const dispRoom = s => String(s).replace(/[_＿]新$/,"");
 
   // ---------- 集計本体 ----------
   function compute(bookingText, cleaningText, satStr){
@@ -402,7 +404,7 @@
       if(!s.rows.length){ body=`<tr><td class="rm" style="color:var(--sub)">なし</td>${s.hasC?"<td></td>":""}</tr>`; }
       else s.rows.forEach(r=>{
         const cls=(r.cleaner==="出勤予定なし")?' class="none"':'';
-        body+=`<tr><td class="rm">${escapeHtml(r.room)}</td>${s.hasC?`<td${cls}>${escapeHtml(r.cleaner)}</td>`:""}</tr>`;
+        body+=`<tr><td class="rm">${escapeHtml(dispRoom(r.room))}</td>${s.hasC?`<td${cls}>${escapeHtml(r.cleaner)}</td>`:""}</tr>`;
       });
       tbl.innerHTML=thead+body;
       sec.appendChild(tbl);
@@ -433,7 +435,7 @@
     let body="";
     if(!G.rows.length){ body=`<tr><td class="rm" style="color:var(--sub)">なし</td><td colspan="${nd+nc}"></td></tr>`; }
     else G.rows.forEach(r=>{
-      body+=`<tr><td class="rm">${escapeHtml(r.room)}</td>`;
+      body+=`<tr><td class="rm">${escapeHtml(dispRoom(r.room))}</td>`;
       r.occ.forEach(o=> body+=`<td class="c">${cell(o)}</td>`);
       r.clns.forEach(cl=> body+=`<td class="${clc(cl)}">${escapeHtml(cl)}</td>`);
       body+="</tr>";
@@ -472,11 +474,11 @@
       if(s.hasC){
         rowsXml+=`<Row><Cell ss:StyleID="hdr"><Data ss:Type="String">部屋</Data></Cell><Cell ss:StyleID="hdr"><Data ss:Type="String">${xesc(s.colLabel)}</Data></Cell></Row>`;
         s.rows.forEach(r=>{ const st=(r.cleaner==="出勤予定なし")?"cellR":"cell";
-          rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell><Cell ss:StyleID="${st}"><Data ss:Type="String">${xesc(r.cleaner)}</Data></Cell></Row>`; });
+          rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(dispRoom(r.room))}</Data></Cell><Cell ss:StyleID="${st}"><Data ss:Type="String">${xesc(r.cleaner)}</Data></Cell></Row>`; });
         if(!s.rows.length) rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell><Cell ss:StyleID="cell"><Data ss:Type="String"></Data></Cell></Row>`;
       } else {
         rowsXml+=`<Row><Cell ss:StyleID="hdr"><Data ss:Type="String">部屋</Data></Cell></Row>`;
-        s.rows.forEach(r=>{ rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell></Row>`; });
+        s.rows.forEach(r=>{ rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(dispRoom(r.room))}</Data></Cell></Row>`; });
         if(!s.rows.length) rowsXml+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell></Row>`;
       }
       rowsXml+=`<Row></Row>`;
@@ -513,7 +515,7 @@ ${rowsXml}
     const cls = v => v==="出勤予定なし" ? "cellR" : "cell";
     let body="";
     if(!G.rows.length){ body=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">なし</Data></Cell></Row>`; }
-    else G.rows.forEach(r=>{ body+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(r.room)}</Data></Cell>`
+    else G.rows.forEach(r=>{ body+=`<Row><Cell ss:StyleID="cell"><Data ss:Type="String">${xesc(dispRoom(r.room))}</Data></Cell>`
       + r.occ.map(o=>mkc(!o)).join("")
       + r.clns.map(cl=>`<Cell ss:StyleID="${cls(cl)}"><Data ss:Type="String">${xesc(cl)}</Data></Cell>`).join("") + `</Row>`; });
     const colDefs = '<Column ss:Width="84"/>' + G.days.map(()=>'<Column ss:Width="58"/>').join("") + G.clnCols.map(()=>'<Column ss:Width="150"/>').join("");
@@ -554,7 +556,7 @@ ${rowsXml}
       y+=colH;
       const rows = s.rows.length? s.rows : [{room:"なし",cleaner:""}];
       rows.forEach(r=>{
-        g.strokeRect(L,y,rmW,rowH); g.fillStyle="#1e2233"; g.font="13px Meiryo,sans-serif"; g.fillText(r.room,L+8,y+8);
+        g.strokeRect(L,y,rmW,rowH); g.fillStyle="#1e2233"; g.font="13px Meiryo,sans-serif"; g.fillText(dispRoom(r.room),L+8,y+8);
         if(s.hasC){ g.strokeRect(L+rmW,y,clW,rowH);
           g.fillStyle=(r.cleaner==="出勤予定なし")?"#c62828":"#1e2233"; g.fillText(r.cleaner,L+rmW+8,y+8); }
         y+=rowH;
@@ -607,7 +609,7 @@ ${rowsXml}
     if(!G.rows.length){ g.strokeRect(L,y,W-L*2,rowH); g.fillStyle="#6b7280"; g.font="12.5px Meiryo,sans-serif"; g.fillText("なし",L+8,y+8); }
     else G.rows.forEach(r=>{
       // 部屋
-      g.strokeRect(xs[0],y,cols[0].w,rowH); g.textAlign="left"; g.font="12.5px Meiryo,sans-serif"; g.fillStyle="#1e2233"; g.fillText(r.room,xs[0]+6,y+8);
+      g.strokeRect(xs[0],y,cols[0].w,rowH); g.textAlign="left"; g.font="12.5px Meiryo,sans-serif"; g.fillStyle="#1e2233"; g.fillText(dispRoom(r.room),xs[0]+6,y+8);
       // 〇×
       r.occ.forEach((o,k)=>{ const i=1+k; g.strokeRect(xs[i],y,cols[i].w,rowH); g.textAlign="center"; g.font="bold 14px Meiryo,sans-serif";
         g.fillStyle=o?"#c4c8d4":"#1b8a3a"; g.fillText(o?"×":"〇",xs[i]+cols[i].w/2,y+6); });
