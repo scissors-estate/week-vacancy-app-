@@ -420,8 +420,8 @@
     for(let i=0;i<nd;i++) colg+="<col style='width:78px'>";
     for(let i=0;i<nc;i++) colg+="<col style='width:150px'>";
     colg+="</colgroup>";
-    // 注意書き行：日付列の上に「〇=空き」、各クリーナー列の上に注意書き
-    let noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${nd}">〇=空き</th>`;
+    // 注意書き行：日付列の上に「〇=空室」、各クリーナー列の上に注意書き
+    let noteRow=`<tr class="noterow"><th></th><th class="lg" colspan="${nd}">〇=空室</th>`;
     G.clnCols.forEach(cc=> noteRow+=`<th class="nt cln">⚠ ${brk(cc.note)}</th>`);
     noteRow+="</tr>";
     // 見出し行
@@ -507,8 +507,8 @@ ${rowsXml}
     const head=`<Row>`+cols.map(c=>`<Cell ss:StyleID="hdr"><Data ss:Type="String">${xesc(c)}</Data></Cell>`).join("")+`</Row>`;
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     const noteCell = nt => `<Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(two(nt)[0])}&#10;${xesc(two(nt)[1])}</Data></Cell>`;
-    // 注意書き行：部屋(空)＋日付列に「〇=空き」＋残り日付列(空)＋各クリーナー注意書き
-    const noteRow=`<Row ss:Height="30"><Cell/><Cell ss:StyleID="lg"><Data ss:Type="String">〇=空き</Data></Cell>`
+    // 注意書き行：部屋(空)＋日付列に「〇=空室」＋残り日付列(空)＋各クリーナー注意書き
+    const noteRow=`<Row ss:Height="30"><Cell/><Cell ss:StyleID="lg"><Data ss:Type="String">〇=空室</Data></Cell>`
       + Array(nd-1).fill("<Cell/>").join("") + G.clnCols.map(cc=>noteCell(cc.note)).join("") + `</Row>`;
     const foot = G.foot ? `<Row></Row><Row ss:Height="30"><Cell ss:StyleID="nt"><Data ss:Type="String">⚠ ${xesc(G.foot).replace("の場合、","の場合、&#10;")}</Data></Cell></Row>` : "";
     const mkc = free => `<Cell ss:StyleID="${free?'ok':'ng'}"><Data ss:Type="String">${free?'〇':'×'}</Data></Cell>`;
@@ -583,10 +583,10 @@ ${rowsXml}
     g.fillStyle="#1e2233"; g.font="bold 14px Meiryo,sans-serif";
     g.fillText(`週末清掃確認　${G.days[0].label}〜${G.days[G.days.length-1].label}`, L, y);
     y+=titleH;
-    // 注意書き帯：〇=空き（日付列の上）＋各クリーナー列の注意書き（2行）
+    // 注意書き帯：〇=空室（日付列の上）＋各クリーナー列の注意書き（2行）
     const two = s => { const i=s.indexOf("入ったら"); return i>=0?[s.slice(0,i+4),s.slice(i+4)]:[s,""]; };
     g.textAlign="left";
-    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空き", xs[1]+2, y+16);
+    g.font="10.5px Meiryo,sans-serif"; g.fillStyle="#6b7280"; g.fillText("〇=空室", xs[1]+2, y+16);
     g.font="8px Meiryo,sans-serif"; g.fillStyle="#8a5a00";
     G.clnCols.forEach((cc,k)=>{ const cx=xs[clnStart+k]; const t=two(cc.note);
       g.fillText("⚠ "+t[0], cx+2, y+4); g.fillText(t[1], cx+2, y+16); });
