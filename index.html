@@ -139,9 +139,9 @@
 
   <div class="files">
     <div class="drop" id="dropB">
-      <b>① 予約CSV</b><small>Booking_*.csv をドロップ / クリックで選択</small>
+      <b>① 予約CSV</b><small>Booking_*.csv をドロップ / クリックで選択（複数可・追加合算）</small>
       <div class="name" id="nameB">未読込</div>
-      <input type="file" id="fileB" accept=".csv" hidden>
+      <input type="file" id="fileB" accept=".csv" multiple hidden>
     </div>
     <div class="drop" id="dropC">
       <b>② 清掃タスクCSV</b><small>cleaning_tasks_*.csv をドロップ / クリックで選択</small>
@@ -356,7 +356,7 @@
   }
 
   // ---------- state ----------
-  const state={ bText:null, cText:null, sat:null, result:null, view:(localStorage.getItem("whv_view")||"grid") };
+  const state={ bText:null, bTexts:[], bNames:[], cText:null, sat:null, result:null, view:(localStorage.getItem("whv_view")||"grid") };
   const $=id=>document.getElementById(id);
 
   // ---------- render ----------
@@ -687,7 +687,7 @@ ${rowsXml}
     el.textContent=`📌 共有データを読み込み済み（データ基準：${when||"—"}）。新しいCSVを読み込むと上書きされます。`;
   }
   function applyShared(d){
-    state.bText=d.booking; state.cText=d.cleaning;
+    state.bText=d.booking; state.bTexts=[d.booking]; state.bNames=["共有データ"]; state.cText=d.cleaning;
     $("nameB").innerHTML='<span class="ok">✓ 共有データ 読込済</span>';
     $("nameC").innerHTML='<span class="ok">✓ 共有データ 読込済</span>';
     showSharedBanner(d.generatedAt); hideLockPanel(); render();
@@ -725,24 +725,43 @@ ${rowsXml}
   }
 
   // ---------- file loading + auto-detect ----------
-  function ingest(text, forced){
+  // 複数の予約CSVを合算（先頭ファイルはそのまま、2件目以降はヘッダー行を除いてデータ行だけ連結）
+  function combineBooking(texts){
+    if(!texts.length) return null;
+    let out = texts[0];
+    for(let i=1;i<texts.length;i++){ const t=texts[i]; const nl=t.indexOf("\n");
+      const body = nl>=0 ? t.slice(nl+1) : "";
+      if(body.trim()!=="") out = out.replace(/\s+$/,"") + "\n" + body; }
+    return out;
+  }
+  function updateBookingName(){
+    const n=state.bNames.length;
+    if(!n){ $("nameB").textContent="未読込"; return; }
+    $("nameB").innerHTML = `<span class="ok">✓ 予約CSV ${n}件 読込済</span><br>`
+      + `<span style="font-size:11px;color:var(--sub)">${state.bNames.map(escapeHtml).join("、")}</span> `
+      + `<button type="button" id="clrB" class="btn btn-ghost" style="padding:1px 7px;font-size:11px">クリア</button>`;
+    const c=$("clrB"); if(c) c.addEventListener("click",ev=>{ ev.stopPropagation();
+      state.bTexts=[]; state.bNames=[]; state.bText=null; updateBookingName(); render(); });
+  }
+  function ingest(text, forced, name){
     const head=(text.split(/\r?\n/,1)[0]||"");
     const isClean = /清掃日/.test(head) || (/部屋タイプ/.test(head) && !/ルームタイプメニュー/.test(head));
     const isBook  = /ルームタイプメニュー/.test(head) || /チェックイン/.test(head);
     let kind = forced || (isClean?"C":(isBook?"B":null));
     if(!kind) return {ok:false,msg:"種類を判別できませんでした"};
-    if(kind==="B"){ state.bText=text; $("nameB").innerHTML='<span class="ok">✓ 予約CSV 読込済</span>'; }
+    if(kind==="B"){ state.bTexts.push(text); state.bNames.push(name||`予約CSV${state.bTexts.length}`);
+      state.bText=combineBooking(state.bTexts); updateBookingName(); }
     else { state.cText=text; $("nameC").innerHTML='<span class="ok">✓ 清掃CSV 読込済</span>'; }
     render(); return {ok:true,kind};
   }
-  function readFile(f, forced){ const rd=new FileReader(); rd.onload=()=> ingest(rd.result, forced); rd.readAsText(f,"UTF-8"); }
+  function readFile(f, forced){ const rd=new FileReader(); rd.onload=()=> ingest(rd.result, forced, f.name); rd.readAsText(f,"UTF-8"); }
   function wireDrop(dropId, inputId, forced, nameId){
     const dz=$(dropId), inp=$(inputId);
-    dz.addEventListener("click",()=> inp.click());
-    inp.addEventListener("change",e=>{ if(e.target.files[0]){ $(nameId).textContent=e.target.files[0].name; readFile(e.target.files[0],forced); } });
+    dz.addEventListener("click",e=>{ if(e.target.closest("button")) return; inp.click(); });
+    inp.addEventListener("change",e=>{ [...e.target.files].forEach(f=> readFile(f,forced)); inp.value=""; });
     ["dragover","dragenter"].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add("over"); }));
     ["dragleave","drop"].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove("over"); }));
-    dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f){ $(nameId).textContent=f.name; readFile(f,forced); } });
+    dz.addEventListener("drop",e=>{ [...e.dataTransfer.files].forEach(f=> readFile(f,forced)); });
   }
 
   // ---------- 祝日設定 UI ----------
